@@ -23,11 +23,10 @@ export default function StatCard({
     <motion.div
       initial={{ y: 20, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
-      whileHover={{ y: -4 }}
+      whileHover={{ y: -2 }}
       className="
         glass p-6 rounded-2xl
         border border-white/10
-        transition-all duration-300
         group
       "
     >
@@ -52,7 +51,7 @@ export default function StatCard({
       <button
         onClick={onDisconnect}
         disabled={loadingDelete}
-        className="text-lg text-white hover:bg-rose-500 transition-all duration-300 bg-red-600 w-full p-2 rounded-2xl cursor-pointer"
+        className="items-center gap-2 px-4 py-2.5 w-full rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold transition-all shadow-lg shadow-purple-600/20"
       >
         {loadingDelete ? "Disconnecting..." : "Disconnect"}
       </button>
