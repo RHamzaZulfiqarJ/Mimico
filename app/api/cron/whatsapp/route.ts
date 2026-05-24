@@ -87,18 +87,6 @@ const handleCron = async (req: Request) => {
       );
     }
 
-    if (!isAuthorized(req)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Unauthorized",
-        },
-        {
-          status: 401,
-        }
-      );
-    }
-
     const limit = getLimit(req);
     const result = await processDueWhatsAppMessages(limit);
 
