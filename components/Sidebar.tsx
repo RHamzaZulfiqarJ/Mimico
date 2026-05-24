@@ -3,19 +3,22 @@
 import { motion } from "framer-motion"
 import {
   LayoutDashboard,
-  Calendar,
+  CalendarClock,
   BarChart3,
-  Settings,
-  PlusCircle,
   Share2,
-  Layers,
   LogOut,
+  MessageCircle,
 } from "lucide-react"
+import { BsTwitterX } from "react-icons/bs"
+import { SiMastodon } from "react-icons/si"
 import { usePathname, useRouter } from "next/navigation"
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/publishing", label: "Publishing", icon: Calendar },
+  { href: "/publishing", label: "Publishing", icon: CalendarClock },
+  { href: "/twitter", label: "Twitter / X", icon: BsTwitterX },
+  { href: "/mastodon", label: "Mastodon", icon: SiMastodon },
+  { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
 ]
 
@@ -24,8 +27,11 @@ export default function Sidebar() {
   const router = useRouter()
 
   const handleLogout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    window.location.href = "/login";
+    await fetch("/api/auth/logout", {
+      method: "POST",
+    })
+
+    window.location.href = "/login"
   }
 
   return (
@@ -34,24 +40,24 @@ export default function Sidebar() {
       animate={{ x: 0, opacity: 1 }}
       className="w-64 glass border-r border-white/5 h-screen sticky top-0 hidden md:flex flex-col z-50"
     >
-      {/* Logo */}
       <div className="p-8">
         <div
           className="flex items-center gap-3 text-purple-500 mb-10 cursor-pointer"
-          onClick={() => router.push("/")}
+          onClick={() => router.push("/dashboard")}
         >
           <div className="w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/20">
             <Share2 className="text-white w-6 h-6" />
           </div>
+
           <span className="font-bold text-xl text-white">
             SproutPulse
           </span>
         </div>
 
-        {/* Navigation */}
         <nav className="space-y-2">
           {navItems.map((item) => {
-            const isActive = pathname === item.href
+            const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`)
+            const Icon = item.icon
 
             return (
               <button
@@ -63,11 +69,9 @@ export default function Sidebar() {
                     : "text-gray-400 hover:text-white hover:bg-white/5"
                 }`}
               >
-                <item.icon
+                <Icon
                   className={`w-5 h-5 transition-transform group-hover:scale-110 ${
-                    isActive
-                      ? "text-purple-400"
-                      : "text-gray-500"
+                    isActive ? "text-purple-400" : "text-gray-500"
                   }`}
                 />
 
@@ -87,7 +91,6 @@ export default function Sidebar() {
         </nav>
       </div>
 
-      {/* Bottom actions */}
       <div className="mt-auto p-6 space-y-3">
         <button
           onClick={handleLogout}

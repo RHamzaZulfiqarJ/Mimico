@@ -6,54 +6,175 @@ datasource db {
   provider = "postgresql"
 }
 
+enum WhatsAppScheduledMessageStatus {
+  DRAFT
+  QUEUED
+  PROCESSING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+enum WhatsAppMessageDirection {
+  OUTBOUND
+  INBOUND
+  STATUS
+}
+
 model User {
-  id             String          @id @default(uuid())
-  firstName      String
-  lastName       String
-  email          String          @unique
-  password       String?
-  provider       String?
-  providerId     String?
-  createdAt      DateTime        @default(now())
-  socialAccounts SocialAccount[]
+  id                        String                     @id @default(uuid())
+  firstName                 String
+  lastName                  String
+  email                     String                     @unique
+  password                  String?
+  provider                  String?
+  providerId                String?
+  createdAt                 DateTime                   @default(now())
+  socialAccounts            SocialAccount[]
+  whatsAppContacts          WhatsAppContact[]
+  whatsAppScheduledMessages WhatsAppScheduledMessage[]
 }
 
 model SocialAccount {
-  id              String @id @default(uuid())
-  platform        String
-  accountId       String
-  accountUsername String
-
-  accessToken     String
-
-  refreshToken    String?
-  tokenExpiry     DateTime?
-  expiresAt       DateTime?
-
-  instanceUrl     String?
-
-  userId          String
-  user            User     @relation(fields: [userId], references: [id])
-
-  scheduledPosts  ScheduledPost[]
-
-  createdAt       DateTime @default(now())
+  id                        String                     @id @default(uuid())
+  platform                  String
+  accountId                 String
+  accountUsername           String
+  accessToken               String
+  refreshToken              String?
+  tokenExpiry               DateTime?
+  expiresAt                 DateTime?
+  instanceUrl               String?
+  businessAccountId         String?
+  phoneNumberId             String?
+  phoneNumberDisplay        String?
+  businessName              String?
+  isActive                  Boolean                    @default(true)
+  userId                    String
+  user                      User                       @relation(fields: [userId], references: [id])
+  scheduledPosts            ScheduledPost[]
+  whatsAppContacts          WhatsAppContact[]
+  whatsAppTemplates         WhatsAppTemplate[]
+  whatsAppScheduledMessages WhatsAppScheduledMessage[]
+  whatsAppMessageLogs       WhatsAppMessageLog[]
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
 
   @@unique([platform, accountId])
+  @@index([userId])
+  @@index([platform])
+  @@index([phoneNumberId])
+  @@index([businessAccountId])
+  @@index([isActive])
 }
 
 model ScheduledPost {
-  id                String   @id @default(uuid())
-  content           String
-  scheduledAt       DateTime
-  postedAt          DateTime?
-  status            String   // pending | posted | failed
-  retryCount        Int      @default(0)
-  errorMessage      String?
-  socialAccountId   String
-  socialAccount     SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
-  createdAt         DateTime @default(now())
-  lastAttemptAt     DateTime?
+  id              String        @id @default(uuid())
+  content         String
+  scheduledAt     DateTime
+  postedAt        DateTime?
+  status          String
+  retryCount      Int           @default(0)
+  errorMessage    String?
+  socialAccountId String
+  socialAccount   SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now())
+  lastAttemptAt   DateTime?
+
   @@index([status])
   @@index([scheduledAt])
+}
+
+model WhatsAppContact {
+  id                String                     @id @default(uuid())
+  userId            String
+  socialAccountId   String
+  name              String
+  phoneNumber       String
+  waId              String?
+  isBlocked         Boolean                    @default(false)
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+  user              User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  socialAccount     SocialAccount              @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  scheduledMessages WhatsAppScheduledMessage[]
+
+  @@unique([userId, socialAccountId, phoneNumber])
+  @@index([userId])
+  @@index([socialAccountId])
+  @@index([phoneNumber])
+}
+
+model WhatsAppTemplate {
+  id              String        @id @default(uuid())
+  socialAccountId String
+  name            String
+  language        String
+  category        String?
+  status          String?
+  components      Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  socialAccount   SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([socialAccountId, name, language])
+  @@index([socialAccountId])
+  @@index([status])
+}
+
+model WhatsAppScheduledMessage {
+  id               String                         @id @default(uuid())
+  userId           String
+  socialAccountId  String
+  contactId        String?
+  recipientPhone   String
+  content          String?
+  templateName     String?
+  templateLanguage String?
+  templateParams   Json?
+  scheduledAt      DateTime
+  sentAt           DateTime?
+  status           WhatsAppScheduledMessageStatus @default(DRAFT)
+  retryCount       Int                            @default(0)
+  errorMessage     String?
+  metaMessageId    String?
+  createdAt        DateTime                       @default(now())
+  updatedAt        DateTime                       @updatedAt
+  lastAttemptAt    DateTime?
+  user             User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  socialAccount    SocialAccount                  @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  contact          WhatsAppContact?               @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  logs             WhatsAppMessageLog[]
+
+  @@index([userId])
+  @@index([socialAccountId])
+  @@index([contactId])
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([recipientPhone])
+  @@index([metaMessageId])
+}
+
+model WhatsAppMessageLog {
+  id                 String                    @id @default(uuid())
+  scheduledMessageId String?
+  socialAccountId    String
+  direction          WhatsAppMessageDirection
+  recipientPhone     String?
+  metaMessageId      String?
+  payload            Json?
+  response           Json?
+  statusCode         Int?
+  success            Boolean                   @default(false)
+  errorMessage       String?
+  webhookEventId     String?
+  createdAt          DateTime                  @default(now())
+  scheduledMessage   WhatsAppScheduledMessage? @relation(fields: [scheduledMessageId], references: [id], onDelete: SetNull)
+  socialAccount      SocialAccount             @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  @@index([scheduledMessageId])
+  @@index([socialAccountId])
+  @@index([direction])
+  @@index([metaMessageId])
+  @@index([webhookEventId])
 }

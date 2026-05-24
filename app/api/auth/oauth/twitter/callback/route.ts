@@ -1,119 +1,119 @@
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
-import axios from "axios";
 import { cookies } from "next/headers";
 import { prisma } from "@/libs/prisma";
 import { verifyToken } from "@/libs/jwt";
 
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const code = searchParams.get("code");
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin;
 
-  if (!code) {
-    return NextResponse.json({ error: "No code received" }, { status: 400 });
-  }
+    try {
+        const { searchParams } = new URL(req.url);
+        const code = searchParams.get("code");
+        const state = searchParams.get("state");
+        const error = searchParams.get("error");
 
-  const cookieStore = await cookies();
-  const codeVerifier = cookieStore.get("twitter_oauth_verifier")?.value;
+        if (error) {
+            return NextResponse.redirect(`${appUrl}/twitter?error=${encodeURIComponent(error)}`);
+        }
 
-  if (!codeVerifier) {
-    return NextResponse.json(
-      { error: "Missing code verifier" },
-      { status: 400 }
-    );
-  }
+        if (!code) {
+            return NextResponse.redirect(`${appUrl}/twitter?error=missing_code`);
+        }
 
-  try {
-    const basicAuth = Buffer.from(
-      `${process.env.TWITTER_CLIENT_ID}:${process.env.TWITTER_CLIENT_SECRET}`
-    ).toString("base64");
+        const cookieStore = await cookies();
+        const codeVerifier = cookieStore.get("twitter_oauth_verifier")?.value;
+        const storedState = cookieStore.get("twitter_oauth_state")?.value;
+        const token = cookieStore.get("token")?.value;
 
-    const tokenResponse = await axios.post(
-      "https://api.twitter.com/2/oauth2/token",
-      new URLSearchParams({
-        code,
-        grant_type: "authorization_code",
-        redirect_uri: `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/oauth/twitter/callback`,
-        code_verifier: codeVerifier,
-      }),
-      {
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          Authorization: `Basic ${basicAuth}`,
-        },
-      }
-    );
+        if (!token) {
+            return NextResponse.redirect(`${appUrl}/login`);
+        }
 
-    const {
-      access_token,
-      refresh_token,
-      expires_in,
-    } = tokenResponse.data;
+        if (!codeVerifier) {
+            return NextResponse.redirect(`${appUrl}/twitter?error=missing_code_verifier`);
+        }
 
-    const profileRes = await axios.get(
-      "https://api.twitter.com/2/users/me",
-      {
-        headers: {
-          Authorization: `Bearer ${access_token}`,
-        },
-      }
-    );
+        if (!storedState || storedState !== state) {
+            return NextResponse.redirect(`${appUrl}/twitter?error=invalid_state`);
+        }
 
-    const twitterUser = profileRes.data.data;
+        const payload = verifyToken(token);
 
-    const token = cookieStore.get("token")?.value;
+        const basicAuth = Buffer.from(`${process.env.TWITTER_CLIENT_ID}:${process.env.TWITTER_CLIENT_SECRET}`).toString(
+            "base64",
+        );
 
-    if (!token) {
-      return NextResponse.json(
-        { error: "User not authenticated" },
-        { status: 401 }
-      );
+        const tokenRes = await fetch("https://api.x.com/2/oauth2/token", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+                Authorization: `Basic ${basicAuth}`,
+            },
+            body: new URLSearchParams({
+                code,
+                grant_type: "authorization_code",
+                redirect_uri: `${appUrl}/api/auth/oauth/twitter/callback`,
+                code_verifier: codeVerifier,
+            }),
+        });
+
+        const tokenData = await tokenRes.json();
+
+        if (!tokenRes.ok) {
+            console.error("TWITTER TOKEN ERROR:", tokenData);
+            return NextResponse.redirect(`${appUrl}/twitter?error=token_exchange_failed`);
+        }
+
+        const profileRes = await fetch("https://api.x.com/2/users/me", {
+            headers: {
+                Authorization: `Bearer ${tokenData.access_token}`,
+            },
+        });
+
+        const profileData = await profileRes.json();
+
+        if (!profileRes.ok) {
+            console.error("TWITTER PROFILE ERROR:", profileData);
+            return NextResponse.redirect(`${appUrl}/twitter?error=profile_fetch_failed`);
+        }
+
+        const twitterUser = profileData.data;
+
+        await prisma.socialAccount.upsert({
+            where: {
+                platform_accountId: {
+                    platform: "twitter",
+                    accountId: twitterUser.id,
+                },
+            },
+            update: {
+                accountUsername: twitterUser.username,
+                accessToken: tokenData.access_token,
+                refreshToken: tokenData.refresh_token,
+                expiresAt: tokenData.expires_in ? new Date(Date.now() + tokenData.expires_in * 1000) : null,
+                userId: payload.id,
+            },
+            create: {
+                platform: "twitter",
+                accountId: twitterUser.id,
+                accountUsername: twitterUser.username,
+                accessToken: tokenData.access_token,
+                refreshToken: tokenData.refresh_token,
+                expiresAt: tokenData.expires_in ? new Date(Date.now() + tokenData.expires_in * 1000) : null,
+                userId: payload.id,
+            },
+        });
+
+        const response = NextResponse.redirect(`${appUrl}/twitter?connected=true`);
+
+        response.cookies.delete("twitter_oauth_verifier");
+        response.cookies.delete("twitter_oauth_state");
+
+        return response;
+    } catch (error) {
+        console.error("TWITTER CALLBACK ERROR:", error);
+        return NextResponse.redirect(`${appUrl}/twitter?error=twitter_callback_failed`);
     }
-
-    const payload = verifyToken(token);
-    const userId = payload.id;
-
-  const existingAccount = await prisma.socialAccount.findFirst({
-    where: {
-        platform: "twitter",
-        accountId: twitterUser.id,
-      },
-    });
-
-    if (existingAccount) {
-      await prisma.socialAccount.update({
-        where: { id: existingAccount.id },
-        data: {
-          accessToken: access_token,
-          refreshToken: refresh_token,
-          expiresAt: new Date(Date.now() + expires_in * 1000),
-        },
-      });
-    } else {
-      await prisma.socialAccount.create({
-        data: {
-          platform: "twitter",
-          accountId: twitterUser.id,
-          accountUsername: twitterUser.username,
-          accessToken: access_token,
-          refreshToken: refresh_token,
-          expiresAt: new Date(Date.now() + expires_in * 1000),
-          userId,
-        },
-      });
-    }
-
-
-    return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/`
-    );
-
-  } catch (error: any) {
-    console.error("FULL ERROR:", error);
-    console.error("ERROR KEYS:", Object.keys(error || {}));
-
-    return NextResponse.json(
-      { error: "OAuth token exchange failed" },
-      { status: 500 }
-    );
-  }
 }

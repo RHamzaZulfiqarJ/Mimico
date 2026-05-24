@@ -23,6 +23,14 @@ import {
 export default function LandingPage() {
   const router = useRouter()
 
+  const scrollToSection = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
+    e.preventDefault()
+    const element = document.getElementById(id)
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth" })
+    }
+  }
+
   const { scrollYProgress } = useScroll()
   const backgroundY = useTransform(scrollYProgress, [0, 1], ["0%", "30%"])
   const opacityHero = useTransform(scrollYProgress, [0, 0.2], [1, 0])
@@ -81,7 +89,7 @@ export default function LandingPage() {
   ]
 
   return (
-    <div className="relative scroll-smooth">
+    <div className="relative">
 
       {/* Progress Bar */}
       <motion.div
@@ -102,11 +110,11 @@ export default function LandingPage() {
         </div>
 
         <div className="hidden md:flex gap-8 text-sm text-gray-400">
-          <a href="#home">Home</a>
-          <a href="#about">About</a>
-          <a href="#features">Features</a>
-          <a href="#pricing">Pricing</a>
-          <a href="#contact">Contact</a>
+          <a href="#home" onClick={(e) => scrollToSection(e, "home")}>Home</a>
+          <a href="#about" onClick={(e) => scrollToSection(e, "about")}>About</a>
+          <a href="#features" onClick={(e) => scrollToSection(e, "features")}>Features</a>
+          <a href="#pricing" onClick={(e) => scrollToSection(e, "pricing")}>Pricing</a>
+          <a href="#contact" onClick={(e) => scrollToSection(e, "contact")}>Contact</a>
         </div>
 
         <div className="flex gap-4">

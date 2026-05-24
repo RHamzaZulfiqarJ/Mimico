@@ -1,0 +1,149 @@
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { verifyToken } from "@/libs/jwt";
+import {
+  deleteWhatsAppContact,
+  updateWhatsAppContact,
+  WhatsAppServiceError,
+} from "@/libs/whatsapp/service";
+
+const getUserId = async (req: Request) => {
+  const cookieToken = (await cookies()).get("token")?.value;
+  const authHeader = req.headers.get("authorization");
+  const bearerToken = authHeader?.startsWith("Bearer ")
+    ? authHeader.slice(7)
+    : null;
+
+  const token = cookieToken || bearerToken;
+
+  if (!token) {
+    return null;
+  }
+
+  try {
+    const payload = verifyToken(token);
+    return payload.id;
+  } catch {
+    return null;
+  }
+};
+
+const readBody = async (req: Request) => {
+  try {
+    return await req.json();
+  } catch {
+    return null;
+  }
+};
+
+const errorResponse = (error: unknown) => {
+  if (error instanceof WhatsAppServiceError) {
+    return NextResponse.json(
+      {
+        error: error.message,
+        code: error.code,
+        subcode: error.subcode,
+        fbtraceId: error.fbtraceId,
+      },
+      {
+        status: error.statusCode,
+      }
+    );
+  }
+
+  if (error instanceof Error) {
+    return NextResponse.json(
+      {
+        error: error.message,
+      },
+      {
+        status: 500,
+      }
+    );
+  }
+
+  return NextResponse.json(
+    {
+      error: "Something went wrong",
+    },
+    {
+      status: 500,
+    }
+  );
+};
+
+type RouteContext = {
+  params: Promise<{
+    id: string;
+  }>;
+};
+
+export async function PATCH(req: Request, context: RouteContext) {
+  try {
+    const userId = await getUserId(req);
+
+    if (!userId) {
+      return NextResponse.json(
+        {
+          error: "Unauthorized",
+        },
+        {
+          status: 401,
+        }
+      );
+    }
+
+    const body = await readBody(req);
+
+    if (!body) {
+      return NextResponse.json(
+        {
+          error: "Invalid JSON body",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    const { id } = await context.params;
+    const contact = await updateWhatsAppContact(userId, id, body);
+
+    return NextResponse.json({
+      success: true,
+      contact,
+    });
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
+
+export async function DELETE(req: Request, context: RouteContext) {
+  try {
+    const userId = await getUserId(req);
+
+    if (!userId) {
+      return NextResponse.json(
+        {
+          error: "Unauthorized",
+        },
+        {
+          status: 401,
+        }
+      );
+    }
+
+    const { id } = await context.params;
+    const contact = await deleteWhatsAppContact(userId, id);
+
+    return NextResponse.json({
+      success: true,
+      contact,
+    });
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
