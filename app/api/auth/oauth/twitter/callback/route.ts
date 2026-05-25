@@ -81,30 +81,42 @@ export async function GET(req: Request) {
 
         const twitterUser = profileData.data;
 
-        await prisma.socialAccount.upsert({
+        const existing = await prisma.socialAccount.findUnique({
             where: {
                 platform_accountId: {
                     platform: "twitter",
                     accountId: twitterUser.id,
                 },
             },
-            update: {
-                accountUsername: twitterUser.username,
-                accessToken: tokenData.access_token,
-                refreshToken: tokenData.refresh_token,
-                expiresAt: tokenData.expires_in ? new Date(Date.now() + tokenData.expires_in * 1000) : null,
-                userId: payload.id,
-            },
-            create: {
-                platform: "twitter",
-                accountId: twitterUser.id,
-                accountUsername: twitterUser.username,
-                accessToken: tokenData.access_token,
-                refreshToken: tokenData.refresh_token,
-                expiresAt: tokenData.expires_in ? new Date(Date.now() + tokenData.expires_in * 1000) : null,
-                userId: payload.id,
-            },
         });
+
+        if (existing && existing.userId !== payload.id) {
+            return NextResponse.redirect(`${appUrl}/twitter?error=account_in_use`);
+        }
+
+        if (existing) {
+            await prisma.socialAccount.update({
+                where: { id: existing.id },
+                data: {
+                    accountUsername: twitterUser.username,
+                    accessToken: tokenData.access_token,
+                    refreshToken: tokenData.refresh_token,
+                    expiresAt: tokenData.expires_in ? new Date(Date.now() + tokenData.expires_in * 1000) : null,
+                },
+            });
+        } else {
+            await prisma.socialAccount.create({
+                data: {
+                    platform: "twitter",
+                    accountId: twitterUser.id,
+                    accountUsername: twitterUser.username,
+                    accessToken: tokenData.access_token,
+                    refreshToken: tokenData.refresh_token,
+                    expiresAt: tokenData.expires_in ? new Date(Date.now() + tokenData.expires_in * 1000) : null,
+                    userId: payload.id,
+                },
+            });
+        }
 
         const response = NextResponse.redirect(`${appUrl}/twitter?connected=true`);
 

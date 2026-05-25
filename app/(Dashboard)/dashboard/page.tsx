@@ -113,6 +113,10 @@ const normalizePlatform = (platform: string) => {
     return "Mastodon";
   }
 
+  if (value === "threads") {
+    return "Instagram Threads";
+  }
+
   if (value === "whatsapp") {
     return "WhatsApp";
   }
@@ -229,7 +233,7 @@ export default function DashboardPage() {
 
       const socialOnly = (accountsData.accounts || []).filter((account: SocialAccount) => {
         const platform = account.platform.toLowerCase();
-        return platform === "twitter" || platform === "mastodon";
+        return platform === "twitter" || platform === "mastodon" || platform === "threads";
       });
 
       const whatsAppSummaryData = await loadWhatsAppSummaries(whatsAppRes.accounts);
@@ -259,6 +263,10 @@ export default function DashboardPage() {
       return account.platform.toLowerCase() === "mastodon";
     }).length;
 
+    const threadsAccounts = socialAccounts.filter((account) => {
+      return account.platform.toLowerCase() === "threads";
+    }).length;
+
     const socialPending = socialPosts.filter((post) => post.status === "pending").length;
     const socialProcessing = socialPosts.filter((post) => post.status === "processing").length;
     const socialPosted = socialPosts.filter((post) => post.status === "posted").length;
@@ -275,6 +283,7 @@ export default function DashboardPage() {
       totalAccounts: socialAccounts.length + whatsAppAccounts.length,
       twitterAccounts,
       mastodonAccounts,
+      threadsAccounts,
       whatsAppNumbers: whatsAppAccounts.length,
       whatsappContacts,
       whatsappTemplates,
@@ -432,7 +441,7 @@ export default function DashboardPage() {
         <MetricCard
           title="Connected Channels"
           value={stats.totalAccounts}
-          text={`${stats.twitterAccounts} Twitter, ${stats.mastodonAccounts} Mastodon, ${stats.whatsAppNumbers} WhatsApp`}
+          text={`${stats.twitterAccounts} Twitter, ${stats.mastodonAccounts} Mastodon, ${stats.threadsAccounts} Threads, ${stats.whatsAppNumbers} WhatsApp`}
           icon={Share2}
         />
 
@@ -545,7 +554,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 xl:grid-cols-5 gap-5">
         <QuickAction
           title="Publishing Hub"
           text="Compose and schedule social content"
@@ -568,6 +577,13 @@ export default function DashboardPage() {
         />
 
         <QuickAction
+          title="Instagram Threads"
+          text="Manage Threads connection and posts"
+          icon={Share2}
+          onClick={() => router.push("/threads")}
+        />
+
+        <QuickAction
           title="WhatsApp"
           text="Send, schedule, and monitor messages"
           icon={MessageCircle}
@@ -584,7 +600,7 @@ export default function DashboardPage() {
           <div>
             <h3 className="font-bold text-white">Dashboard rule</h3>
             <p className="text-sm text-gray-400 mt-1">
-              This page is only for combined system content and overall health. Twitter, Mastodon, and WhatsApp account actions stay inside their own pages.
+              This page is only for combined system content and overall health. Twitter, Mastodon, Threads, and WhatsApp account actions stay inside their own pages.
             </p>
           </div>
         </div>

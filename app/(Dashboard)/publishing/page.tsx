@@ -17,6 +17,8 @@ import {
 import ComposeModal from "@/app/(Dashboard)/publishing/ComposeModal";
 import { PLATFORMS } from "@/libs/platform";
 
+type DefaultPlatform = keyof typeof PLATFORMS | "all";
+
 type Post = {
     id: string;
     content: string;
@@ -42,6 +44,7 @@ export default function PublishingPage() {
     const [posts, setPosts] = useState<Post[]>([]);
     const [loadingPosts, setLoadingPosts] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [defaultPlatform, setDefaultPlatform] = useState<DefaultPlatform>("all");
 
     const loadPosts = async () => {
         try {
@@ -65,7 +68,19 @@ export default function PublishingPage() {
 
     useEffect(() => {
         loadPosts();
+
+        const platform = new URLSearchParams(window.location.search).get("platform");
+
+        if (platform === "twitter" || platform === "mastodon" || platform === "threads") {
+            setDefaultPlatform(platform);
+        }
     }, []);
+
+    useEffect(() => {
+        if (defaultPlatform !== "all") {
+            setIsComposeOpen(true);
+        }
+    }, [defaultPlatform]);
 
     const closeCompose = () => {
         setIsComposeOpen(false);
@@ -88,7 +103,9 @@ export default function PublishingPage() {
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
                 <div>
                     <h1 className="text-3xl font-bold text-white">Publishing</h1>
-                    <p className="text-gray-400 mt-1">Create, schedule, and track Twitter/X and Mastodon posts.</p>
+                    <p className="text-gray-400 mt-1">
+                        Create, schedule, and track Twitter/X, Mastodon, and Instagram Threads posts.
+                    </p>
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -189,7 +206,9 @@ export default function PublishingPage() {
                             <Send className="w-7 h-7 text-purple-300" />
                         </div>
                         <h3 className="text-white font-bold mt-5">No posts yet</h3>
-                        <p className="text-gray-400 text-sm mt-2">Compose your first Twitter/X or Mastodon post.</p>
+                        <p className="text-gray-400 text-sm mt-2">
+                            Compose your first Twitter/X, Mastodon, or Instagram Threads post.
+                        </p>
                     </div>
                 ) : (
                     <div className="divide-y divide-white/5">
@@ -281,6 +300,7 @@ export default function PublishingPage() {
                 setSelectedAccounts={setSelectedAccounts}
                 isOpen={isComposeOpen}
                 onClose={closeCompose}
+                defaultPlatform={defaultPlatform}
             />
         </motion.div>
     );

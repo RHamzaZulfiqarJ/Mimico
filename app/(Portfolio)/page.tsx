@@ -1,509 +1,634 @@
-"use client"
+"use client";
 
-import { motion, useScroll, useTransform, useSpring } from "framer-motion"
-import { useRouter } from "next/navigation"
+import type { MouseEvent } from "react";
+import { motion, useScroll, useSpring, useTransform } from "framer-motion";
+import { useRouter } from "next/navigation";
 import {
-  Share2,
-  Sparkles,
-  Zap,
-  BarChart3,
-  ChevronRight,
-  MessageSquare,
-  Mail,
-  Github,
-  Twitter,
-  Linkedin,
-  Check,
-  Users,
-  Play,
-  Star,
-  ArrowRight,
-} from "lucide-react"
+    Activity,
+    ArrowRight,
+    BarChart3,
+    CalendarClock,
+    Check,
+    ChevronRight,
+    ClipboardList,
+    Clock,
+    Github,
+    Layers3,
+    Linkedin,
+    LockKeyhole,
+    Mail,
+    MessageCircle,
+    RadioTower,
+    RefreshCw,
+    Send,
+    Share2,
+    ShieldCheck,
+    Smartphone,
+    Twitter,
+    Workflow,
+    type LucideIcon,
+} from "lucide-react";
+import { BsTwitterX } from "react-icons/bs";
+import { SiMastodon, SiThreads, SiWhatsapp } from "react-icons/si";
+
+type NavItem = {
+    label: string;
+    id: string;
+};
+
+type Metric = {
+    value: string;
+    label: string;
+};
+
+type Feature = {
+    icon: LucideIcon;
+    title: string;
+    description: string;
+    points: string[];
+};
+
+type WorkflowStep = {
+    icon: LucideIcon;
+    title: string;
+    description: string;
+};
+
+type Platform = {
+    name: string;
+    status: string;
+    description: string;
+    icon: LucideIcon | typeof BsTwitterX | typeof SiMastodon | typeof SiThreads | typeof SiWhatsapp;
+};
+
+const navItems: NavItem[] = [
+    { label: "Overview", id: "overview" },
+    { label: "Workflow", id: "workflow" },
+    { label: "Platforms", id: "platforms" },
+    { label: "Security", id: "security" },
+];
+
+const metrics: Metric[] = [
+    { value: "4", label: "Channel types" },
+    { value: "1", label: "Unified workspace" },
+    { value: "24/7", label: "Scheduled delivery" },
+];
+
+const features: Feature[] = [
+    {
+        icon: Layers3,
+        title: "Unified account control",
+        description: "Keep every connected profile organized without mixing platform-specific workflows.",
+        points: ["Separate channel pages", "Clean account status", "Fast reconnect actions"],
+    },
+    {
+        icon: CalendarClock,
+        title: "Publishing that stays reliable",
+        description: "Create, post now, schedule later, and track failures from one operational queue.",
+        points: ["Immediate publishing", "Scheduled posts", "Retry-aware status"],
+    },
+    {
+        icon: MessageCircle,
+        title: "WhatsApp operations",
+        description: "Manage contacts, templates, message logs, and scheduled conversations in a structured way.",
+        points: ["Template management", "Contact lists", "Delivery history"],
+    },
+];
+
+const workflow: WorkflowStep[] = [
+    {
+        icon: Share2,
+        title: "Connect",
+        description: "Add social and WhatsApp accounts with the required platform credentials.",
+    },
+    {
+        icon: ClipboardList,
+        title: "Prepare",
+        description: "Write posts, organize recipients, and select approved WhatsApp templates.",
+    },
+    {
+        icon: Send,
+        title: "Publish",
+        description: "Send instantly or schedule delivery while keeping every item visible in the queue.",
+    },
+    {
+        icon: BarChart3,
+        title: "Review",
+        description: "Monitor posted, pending, failed, and processing activity across the workspace.",
+    },
+];
+
+const platforms: Platform[] = [
+    {
+        name: "Twitter / X",
+        status: "Publishing ready",
+        description: "Post publishing and scheduled queue management for connected X accounts.",
+        icon: BsTwitterX,
+    },
+    {
+        name: "Threads",
+        status: "Integration layer prepared",
+        description: "Publisher logic is structured for Threads integration without disturbing existing channels.",
+        icon: SiThreads,
+    },
+    {
+        name: "WhatsApp Business",
+        status: "Messaging ready",
+        description: "Contacts, templates, scheduled messages, logs, and send-now actions.",
+        icon: SiWhatsapp,
+    },
+    {
+        name: "Mastodon",
+        status: "Publishing ready",
+        description: "Instance-aware account connection and scheduled post tracking.",
+        icon: SiMastodon,
+    },
+];
+
+const operations = [
+    "Dashboard summaries",
+    "Dedicated platform pages",
+    "Publishing queue",
+    "WhatsApp templates",
+    "Message logs",
+    "Failure visibility",
+];
 
 export default function LandingPage() {
-  const router = useRouter()
+    const router = useRouter();
+    const { scrollYProgress } = useScroll();
+    const scaleProgress = useSpring(scrollYProgress, {
+        stiffness: 100,
+        damping: 28,
+        restDelta: 0.001,
+    });
+    const backgroundY = useTransform(scrollYProgress, [0, 1], ["0%", "18%"]);
 
-  const scrollToSection = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
-    e.preventDefault()
-    const element = document.getElementById(id)
-    if (element) {
-      element.scrollIntoView({ behavior: "smooth" })
-    }
-  }
+    const scrollToSection = (e: MouseEvent<HTMLAnchorElement>, id: string) => {
+        e.preventDefault();
+        document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+    };
 
-  const { scrollYProgress } = useScroll()
-  const backgroundY = useTransform(scrollYProgress, [0, 1], ["0%", "30%"])
-  const opacityHero = useTransform(scrollYProgress, [0, 0.2], [1, 0])
-  const scaleProgress = useSpring(scrollYProgress, {
-    stiffness: 100,
-    damping: 30,
-    restDelta: 0.001,
-  })
-
-  const features = [
-    {
-      title: "AI Copywriting",
-      desc: "Gemini-powered captions that convert followers into customers instantly.",
-      icon: Sparkles,
-      color: "text-purple-400",
-    },
-    {
-      title: "Smart Scheduling",
-      desc: "Post at the exact moment your audience is most active globally.",
-      icon: Zap,
-      color: "text-amber-400",
-    },
-    {
-      title: "Deep Analytics",
-      desc: "Visualize growth patterns with enterprise-grade chart intelligence.",
-      icon: BarChart3,
-      color: "text-blue-400",
-    },
-    {
-      title: "Unified Inbox",
-      desc: "Manage every interaction across all platforms in one smooth stream.",
-      icon: MessageSquare,
-      color: "text-emerald-400",
-    },
-  ]
-
-  const steps = [
-    { number: "01", title: "Connect Accounts", desc: "Securely link your social platforms." },
-    { number: "02", title: "Generate & Polish", desc: "Create content with AI assistance." },
-    { number: "03", title: "Automated Growth", desc: "Publish at peak engagement time." },
-  ]
-
-  const pricing = [
-    { name: "Starter", price: "Free", features: ["3 Profiles", "Basic AI", "Weekly Reports"] },
-    {
-      name: "Growth",
-      price: "$49",
-      popular: true,
-      features: ["10 Profiles", "Unlimited AI", "Daily Analytics"],
-    },
-    {
-      name: "Enterprise",
-      price: "$199",
-      features: ["Unlimited", "Custom Models", "Priority Support"],
-    },
-  ]
-
-  return (
-    <div className="relative">
-
-      {/* Progress Bar */}
-      <motion.div
-        className="fixed top-0 left-0 right-0 h-1 bg-purple-600 origin-left z-[110]"
-        style={{ scaleX: scaleProgress }}
-      />
-
-      {/* ================= NAVBAR ================= */}
-      <nav className="fixed top-0 left-0 right-0 h-20 glass z-[100] border-b border-white/5 px-8 flex items-center justify-between">
-        <div
-          className="flex items-center gap-3 cursor-pointer"
-          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-        >
-          <div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center">
-            <Share2 className="text-white w-5 h-5" />
-          </div>
-          <span className="font-bold text-xl text-white">SproutPulse</span>
-        </div>
-
-        <div className="hidden md:flex gap-8 text-sm text-gray-400">
-          <a href="#home" onClick={(e) => scrollToSection(e, "home")}>Home</a>
-          <a href="#about" onClick={(e) => scrollToSection(e, "about")}>About</a>
-          <a href="#features" onClick={(e) => scrollToSection(e, "features")}>Features</a>
-          <a href="#pricing" onClick={(e) => scrollToSection(e, "pricing")}>Pricing</a>
-          <a href="#contact" onClick={(e) => scrollToSection(e, "contact")}>Contact</a>
-        </div>
-
-        <div className="flex gap-4">
-          <button
-            onClick={() => router.push("/login")}
-            className="text-gray-300 hover:text-white"
-          >
-            Log In
-          </button>
-
-          <button
-            onClick={() => router.push("/signup")}
-            className="bg-purple-600 hover:bg-purple-500 text-white px-5 py-2.5 rounded-xl text-xs font-bold"
-          >
-            Get Started Free
-          </button>
-        </div>
-      </nav>
-
-      {/* Hero Section */}
-      <section id="home" className="min-h-screen pt-32 flex flex-col items-center justify-center text-center px-4 relative overflow-hidden">
-        <motion.div 
-          style={{ y: backgroundY, opacity: opacityHero }}
-          className="absolute inset-0 pointer-events-none -z-10"
-        >
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-purple-600/10 rounded-full blur-[120px]" />
-          <div className="absolute top-[10%] left-[10%] w-[600px] h-[600px] bg-blue-600/5 rounded-full blur-[100px]" />
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8 }}
-          className="max-w-5xl"
-        >
-          <motion.span 
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="px-4 py-1.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400 text-[10px] font-bold uppercase tracking-widest mb-6 inline-block"
-          >
-            The #1 AI Social Dashboard
-          </motion.span>
-          <h1 className="text-6xl md:text-9xl font-black text-white leading-[0.9] mb-8 tracking-tighter">
-            GROW YOUR <br />
-            <span className="bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400">
-              AUDIENCE FASTER.
-            </span>
-          </h1>
-          <p className="text-xl md:text-2xl text-gray-400 max-w-2xl mx-auto mb-12 leading-relaxed font-light">
-            Unleash the power of AI to create content that captivates. SproutPulse is the premium operating system for modern creators.
-          </p>
-          <div className="flex flex-col md:flex-row items-center justify-center gap-6">
-            <button 
-              onClick={() => router.push('signup')}
-              className="w-full md:w-auto px-12 py-6 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-2xl shadow-2xl shadow-purple-600/30 transition-all active:scale-95 text-xl"
-            >
-              Start Your Free Trial
-            </button>
-            <button className="w-full md:w-auto px-12 py-6 glass border-white/10 hover:bg-white/5 text-white font-bold rounded-2xl transition-all text-xl flex items-center justify-center gap-3">
-              Watch Demo <Play className="w-5 h-5 fill-current" />
-            </button>
-          </div>
-        </motion.div>
-
-        {/* Floating Mockup Preview */}
-        <motion.div
-          initial={{ opacity: 0, y: 150 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 1, type: 'spring', bounce: 0.3 }}
-          className="mt-32 w-full max-w-7xl mx-auto glass rounded-t-3xl border-t border-x border-white/10 p-4 shadow-[0_-40px_100px_rgba(139,92,246,0.2)] overflow-hidden h-[500px]"
-        >
-          <div className="bg-gray-950/90 rounded-t-2xl w-full h-full p-8 overflow-hidden relative">
-             <div className="flex gap-2 mb-8">
-               <div className="w-3 h-3 rounded-full bg-rose-500/40"></div>
-               <div className="w-3 h-3 rounded-full bg-amber-500/40"></div>
-               <div className="w-3 h-3 rounded-full bg-emerald-500/40"></div>
-             </div>
-             <div className="grid grid-cols-12 gap-8">
-                <div className="col-span-3 space-y-6">
-                  <div className="h-4 bg-white/5 rounded w-3/4"></div>
-                  <div className="h-12 bg-purple-600/20 rounded-xl w-full border border-purple-500/30"></div>
-                  <div className="h-12 bg-white/5 rounded-xl w-full"></div>
-                  <div className="h-12 bg-white/5 rounded-xl w-full"></div>
-                  <div className="h-12 bg-white/5 rounded-xl w-full"></div>
-                </div>
-                <div className="col-span-9 space-y-8">
-                  <div className="grid grid-cols-3 gap-6">
-                    <div className="h-32 bg-white/5 rounded-2xl w-full border border-white/5 p-4 flex flex-col justify-center">
-                       <div className="w-8 h-8 rounded bg-purple-500/20 mb-3"></div>
-                       <div className="h-2 bg-white/10 w-full rounded"></div>
-                    </div>
-                    <div className="h-32 bg-white/5 rounded-2xl w-full border border-white/5 p-4 flex flex-col justify-center">
-                       <div className="w-8 h-8 rounded bg-blue-500/20 mb-3"></div>
-                       <div className="h-2 bg-white/10 w-full rounded"></div>
-                    </div>
-                    <div className="h-32 bg-white/5 rounded-2xl w-full border border-white/5 p-4 flex flex-col justify-center">
-                       <div className="w-8 h-8 rounded bg-emerald-500/20 mb-3"></div>
-                       <div className="h-2 bg-white/10 w-full rounded"></div>
-                    </div>
-                  </div>
-                  <div className="h-64 bg-white/[0.02] rounded-3xl w-full border border-white/5 p-8 relative overflow-hidden">
-                     <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-purple-600/10 to-transparent"></div>
-                     <BarChart3 className="w-16 h-16 text-purple-500/30 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-                  </div>
-                </div>
-             </div>
-          </div>
-        </motion.div>
-      </section>
-
-      {/* Social Proof Marquee */}
-      <div className="py-20 border-y border-white/5 bg-gray-950 flex flex-col items-center overflow-hidden">
-        <p className="text-[10px] uppercase font-bold tracking-[0.3em] text-gray-500 mb-10">Trusted by over 10,000+ brands</p>
-        <div className="flex gap-20 items-center opacity-30 grayscale hover:grayscale-0 transition-all duration-700">
-           {['VELOCITY', 'AURORA', 'LUMINA', 'PULSE', 'STARK', 'NEXUS'].map((brand) => (
-             <span key={brand} className="text-3xl font-black text-white tracking-widest">{brand}</span>
-           ))}
-        </div>
-      </div>
-
-      {/* About Section */}
-      <section id="about" className="py-40 px-4 bg-gray-950/50 relative overflow-hidden">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-24 items-center">
+    return (
+        <main className="relative min-h-screen overflow-hidden bg-gray-950 text-white">
             <motion.div
-              initial={{ opacity: 0, x: -50 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              className="space-y-10"
-            >
-              <h2 className="text-5xl md:text-7xl font-bold text-white leading-tight">
-                Built for those <br /> 
-                <span className="text-purple-500">Who Execute.</span>
-              </h2>
-              <p className="text-gray-400 text-xl leading-relaxed font-light">
-                We believe content creation should be effortless. That's why we've stripped away the noise and built a workspace focused on flow, performance, and intelligent automation.
-              </p>
-              <div className="grid grid-cols-2 gap-8">
-                <div className="space-y-2">
-                   <h4 className="text-3xl font-black text-white">99%</h4>
-                   <p className="text-gray-500 text-sm uppercase tracking-widest font-bold">Accuracy</p>
-                </div>
-                <div className="space-y-2">
-                   <h4 className="text-3xl font-black text-white">12x</h4>
-                   <p className="text-gray-500 text-sm uppercase tracking-widest font-bold">Faster Output</p>
-                </div>
-              </div>
-              <button className="flex items-center gap-3 text-white font-bold group">
-                Learn more about our vision <ArrowRight className="w-5 h-5 text-purple-500 group-hover:translate-x-2 transition-transform" />
-              </button>
+                className="fixed left-0 right-0 top-0 z-[120] h-1 origin-left bg-purple-500"
+                style={{ scaleX: scaleProgress }}
+            />
+
+            <motion.div style={{ y: backgroundY }} className="pointer-events-none fixed inset-0 -z-0">
+                <div className="absolute left-1/2 top-0 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-purple-600/10 blur-[120px]" />
+                <div className="absolute right-[-10%] top-[18%] h-[420px] w-[420px] rounded-full bg-blue-600/10 blur-[110px]" />
+                <div className="absolute bottom-[5%] left-[-12%] h-[420px] w-[420px] rounded-full bg-emerald-500/10 blur-[120px]" />
             </motion.div>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              viewport={{ once: true }}
-              className="relative"
-            >
-               <div className="aspect-square glass rounded-[60px] border border-white/5 overflow-hidden flex items-center justify-center p-12">
-                  <motion.div
-                    animate={{ rotate: -360 }}
-                    transition={{ duration: 30, repeat: Infinity, ease: 'linear' }}
-                    className="absolute inset-0 border-[2px] border-dashed border-purple-500/10 rounded-full scale-110"
-                  />
-                  <div className="relative z-10 text-center">
-                    <Users className="w-24 h-24 text-purple-500 mx-auto mb-6 drop-shadow-[0_0_30px_rgba(139,92,246,0.4)]" />
-                    <p className="text-white font-bold text-2xl">Collaborative Spirit</p>
-                    <p className="text-gray-500 text-sm mt-2">Scale with your team seamlessly.</p>
-                  </div>
-               </div>
-            </motion.div>
-          </div>
-        </div>
-      </section>
 
-      {/* Features Grid */}
-      <section id="features" className="py-40 px-4">
-        <div className="max-w-7xl mx-auto text-center mb-24">
-          <motion.h2 
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="text-5xl md:text-8xl font-black text-white mb-8"
-          >
-            Power tools for <br /> modern brands.
-          </motion.h2>
-          <p className="text-gray-400 text-xl max-w-2xl mx-auto font-light">Stop jumping between tabs. One ecosystem to rule your digital footprint.</p>
-        </div>
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-          {features.map((f, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.1 }}
-              whileHover={{ y: -12, backgroundColor: 'rgba(255,255,255,0.02)' }}
-              className="glass p-10 rounded-[40px] border border-white/5 hover:border-purple-500/40 transition-all group"
-            >
-              <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-8 group-hover:bg-purple-600/20 transition-all group-hover:rotate-6">
-                <f.icon className={`w-8 h-8 ${f.color}`} />
-              </div>
-              <h3 className="text-2xl font-bold text-white mb-4 transition-colors">{f.title}</h3>
-              <p className="text-gray-500 leading-relaxed font-light">{f.desc}</p>
-            </motion.div>
-          ))}
-        </div>
-      </section>
+            <nav className="fixed left-0 right-0 top-4 z-[100] px-4 md:px-8">
+                <div className="mx-auto flex max-w-7xl items-center justify-between rounded-[1.75rem] border border-white/10 bg-gray-950/70 px-4 py-3 shadow-2xl shadow-black/30 backdrop-blur-2xl md:px-5">
+                    <button
+                        type="button"
+                        onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+                        className="group flex items-center gap-3"
+                    >
 
-      {/* How it Works Section */}
-      <section className="py-40 px-4 bg-gray-950/30">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-24">
-            <h2 className="text-5xl font-black text-white mb-4">Three steps to dominance.</h2>
-            <p className="text-gray-500">It's simple, it's fast, it's SproutPulse.</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-            {steps.map((step, i) => (
-              <motion.div 
-                key={i}
-                initial={{ opacity: 0, scale: 0.9 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.2 }}
-                className="relative group p-8"
-              >
-                <div className="text-8xl font-black text-white/5 absolute top-0 left-0 leading-none group-hover:text-purple-600/10 transition-colors">
-                   {step.number}
+                        <span className="flex flex-col items-start leading-none">
+                            <span className="text-base font-semibold tracking-tight text-white md:text-lg">
+                                MIMICO
+                            </span>
+                            <span className="mt-1 hidden text-[11px] font-medium uppercase tracking-[0.22em] text-gray-500 sm:block">
+                                Social Operations
+                            </span>
+                        </span>
+                    </button>
+
+                    <div className="hidden items-center rounded-2xl border border-white/10 bg-white/[0.04] p-1 lg:flex">
+                        {navItems.map((item) => (
+                            <a
+                                key={item.id}
+                                href={`#${item.id}`}
+                                onClick={(e) => scrollToSection(e, item.id)}
+                                className="rounded-xl px-4 py-2 text-sm font-medium text-gray-400 transition-all hover:bg-white/[0.08] hover:text-white"
+                            >
+                                {item.label}
+                            </a>
+                        ))}
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        <button
+                            type="button"
+                            onClick={() => router.push("/login")}
+                            className="hidden rounded-2xl px-4 py-2 text-sm font-semibold text-gray-300 transition-all hover:bg-white/[0.06] hover:text-white sm:block"
+                        >
+                            Log in
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => router.push("/signup")}
+                            className="group inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-2.5 text-sm font-semibold text-gray-950 shadow-lg shadow-white/10 transition-all hover:-translate-y-0.5 hover:bg-gray-200 active:translate-y-0 md:px-5"
+                        >
+                            Create account
+                            <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                        </button>
+                    </div>
                 </div>
-                <div className="relative z-10">
-                   <h3 className="text-2xl font-bold text-white mb-4 mt-8">{step.title}</h3>
-                   <p className="text-gray-400 font-light leading-relaxed">{step.desc}</p>
+
+                <div className="mx-auto mt-3 flex max-w-7xl items-center gap-2 overflow-x-auto rounded-2xl border border-white/10 bg-gray-950/55 p-2 backdrop-blur-xl lg:hidden">
+                    {navItems.map((item) => (
+                        <a
+                            key={item.id}
+                            href={`#${item.id}`}
+                            onClick={(e) => scrollToSection(e, item.id)}
+                            className="whitespace-nowrap rounded-xl px-4 py-2 text-xs font-medium text-gray-400 transition-all hover:bg-white/[0.08] hover:text-white"
+                        >
+                            {item.label}
+                        </a>
+                    ))}
                 </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
+            </nav>
 
-      {/* Pricing Section */}
-      <section id="pricing" className="py-40 px-4">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-24">
-            <h2 className="text-5xl font-black text-white mb-4">Transparent Pricing.</h2>
-            <p className="text-gray-500">Choose the plan that fits your ambition.</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-             {pricing.map((p, i) => (
-               <motion.div
-                 key={i}
-                 initial={{ opacity: 0, y: 30 }}
-                 whileInView={{ opacity: 1, y: 0 }}
-                 viewport={{ once: true }}
-                 className={`p-10 rounded-[40px] border flex flex-col ${p.popular ? 'bg-purple-600 border-purple-400 shadow-2xl shadow-purple-600/30' : 'glass border-white/5'}`}
-               >
-                 <div className="mb-8">
-                   <h4 className={`text-xl font-bold ${p.popular ? 'text-white' : 'text-gray-400'}`}>{p.name}</h4>
-                   <p className="text-4xl font-black text-white mt-2">{p.price}</p>
-                   {p.price !== 'Free' && <span className="text-xs text-white/60">per month</span>}
-                 </div>
-                 <ul className="space-y-4 mb-10 flex-1">
-                   {p.features.map((f) => (
-                     <li key={f} className="flex items-center gap-3 text-sm text-white/80">
-                        <Check className="w-4 h-4" /> {f}
-                     </li>
-                   ))}
-                 </ul>
-                 <button className={`w-full py-4 rounded-2xl font-bold transition-all active:scale-95 ${p.popular ? 'bg-white text-purple-600 hover:bg-gray-100' : 'bg-white/5 text-white hover:bg-white/10'}`}>
-                    Choose {p.name}
-                 </button>
-               </motion.div>
-             ))}
-          </div>
-        </div>
-      </section>
+            <section className="relative z-10 px-5 pb-24 pt-32 md:px-8 md:pb-32 md:pt-40">
+                <div className="mx-auto grid max-w-7xl items-center gap-14 lg:grid-cols-[1fr_0.92fr]">
+                    <motion.div
+                        initial={{ opacity: 0, y: 24 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.7 }}
+                    >
+                        <h1 className="max-w-4xl text-5xl font-semibold tracking-[-0.05em] text-white md:text-7xl md:leading-[0.95]">
+                            Manage publishing and messaging without the messy dashboard.
+                        </h1>
 
-      {/* Testimonials */}
-      <section className="py-40 px-4 bg-purple-600/5 overflow-hidden">
-        <div className="max-w-7xl mx-auto flex flex-col items-center">
-          <div className="flex gap-1 mb-8">
-            {[1,2,3,4,5].map(i => <Star key={i} className="w-6 h-6 fill-purple-500 text-purple-500" />)}
-          </div>
-          <motion.p 
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            className="text-3xl md:text-5xl font-medium text-white text-center max-w-4xl italic leading-tight"
-          >
-            "SproutPulse changed the game for us. We went from posting twice a week to twice a day without adding any headcount. The AI generator is like magic."
-          </motion.p>
-          <div className="mt-12 flex items-center gap-4">
-             <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-purple-600 to-pink-500 p-1">
-                <img src="https://picsum.photos/seed/ceo/100/100" className="w-full h-full rounded-full object-cover" alt="Client" />
-             </div>
-             <div className="text-left">
-                <p className="text-white font-bold">Marcus Chen</p>
-                <p className="text-purple-400 text-sm font-medium">CEO at TechVanguard</p>
-             </div>
-          </div>
-        </div>
-      </section>
+                        <p className="mt-7 max-w-2xl text-lg leading-8 text-gray-400 md:text-xl">
+                            Account Manager brings social publishing, WhatsApp Business workflows, scheduling, and
+                            activity tracking into one focused workspace built for real execution.
+                        </p>
 
-      {/* Contact Section */}
-      <section id="contact" className="py-40 px-4 relative overflow-hidden">
-        <div className="max-w-5xl mx-auto glass p-16 rounded-[60px] border border-white/10 shadow-2xl relative">
-          <div className="absolute top-0 right-0 w-80 h-80 bg-purple-600/20 rounded-full blur-[100px] -z-10" />
-          <div className="text-center mb-16">
-            <h2 className="text-6xl font-black text-white mb-6">Let's Connect.</h2>
-            <p className="text-gray-400 text-lg max-w-xl mx-auto">Ready to accelerate your digital growth? Our experts are standing by.</p>
-          </div>
-          <form className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-3">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-widest ml-1">Your Name</label>
-                <input type="text" placeholder="John Wick" className="w-full bg-gray-950/50 border border-white/5 rounded-2xl p-5 text-white placeholder:text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-all" />
-              </div>
-              <div className="space-y-3">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-widest ml-1">Email Address</label>
-                <input type="email" placeholder="john@continental.com" className="w-full bg-gray-950/50 border border-white/5 rounded-2xl p-5 text-white placeholder:text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-all" />
-              </div>
-            </div>
-            <div className="space-y-3">
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-widest ml-1">Message</label>
-              <textarea placeholder="How can we help you grow?" className="w-full h-48 bg-gray-950/50 border border-white/5 rounded-3xl p-6 text-white placeholder:text-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500/20 resize-none transition-all"></textarea>
-            </div>
-            <button className="w-full py-6 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-2xl shadow-xl shadow-purple-600/20 transition-all active:scale-95 flex items-center justify-center gap-3 text-xl">
-              Send Message <ChevronRight className="w-6 h-6" />
-            </button>
-          </form>
-        </div>
-      </section>
+                        <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+                            <button
+                                type="button"
+                                onClick={() => router.push("/signup")}
+                                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-purple-600 px-7 py-4 text-sm font-semibold text-white shadow-2xl shadow-purple-950/40 transition-all hover:bg-purple-500 active:scale-95"
+                            >
+                                Start managing accounts
+                                <ArrowRight className="h-4 w-4" />
+                            </button>
+                            <a
+                                href="#overview"
+                                onClick={(e) => scrollToSection(e, "overview")}
+                                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-7 py-4 text-sm font-semibold text-white transition-all hover:bg-white/10 active:scale-95"
+                            >
+                                View product overview
+                                <ChevronRight className="h-4 w-4" />
+                            </a>
+                        </div>
 
-      {/* Footer */}
-      <footer className="py-24 px-8 border-t border-white/5 bg-gray-950/80">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-16">
-          <div className="space-y-8">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center">
-                <Share2 className="text-white w-6 h-6" />
-              </div>
-              <span className="font-bold text-2xl tracking-tight text-white">SproutPulse</span>
-            </div>
-            <p className="text-gray-500 text-sm leading-relaxed max-w-xs font-light">
-              Elevating social media management through the lens of artificial intelligence and high-performance design.
-            </p>
-            <div className="flex gap-6">
-              <Twitter className="w-6 h-6 text-gray-600 hover:text-white transition-colors cursor-pointer" />
-              <Github className="w-6 h-6 text-gray-600 hover:text-white transition-colors cursor-pointer" />
-              <Linkedin className="w-6 h-6 text-gray-600 hover:text-white transition-colors cursor-pointer" />
-            </div>
-          </div>
-          <div>
-            <h4 className="text-white font-bold mb-8 uppercase text-xs tracking-[0.2em]">Product</h4>
-            <ul className="space-y-4 text-gray-500 text-sm font-medium">
-              <li className="hover:text-purple-400 transition-colors cursor-pointer">AI Generator</li>
-              <li className="hover:text-purple-400 transition-colors cursor-pointer">Global Scheduler</li>
-              <li className="hover:text-purple-400 transition-colors cursor-pointer">Advanced Insights</li>
-              <li className="hover:text-purple-400 transition-colors cursor-pointer">API Access</li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="text-white font-bold mb-8 uppercase text-xs tracking-[0.2em]">Company</h4>
-            <ul className="space-y-4 text-gray-500 text-sm font-medium">
-              <li className="hover:text-purple-400 transition-colors cursor-pointer">About Us</li>
-              <li className="hover:text-purple-400 transition-colors cursor-pointer">Careers</li>
-              <li className="hover:text-purple-400 transition-colors cursor-pointer">Brand Assets</li>
-              <li className="hover:text-purple-400 transition-colors cursor-pointer">Privacy</li>
-            </ul>
-          </div>
-          <div className="space-y-8">
-            <h4 className="text-white font-bold uppercase text-xs tracking-[0.2em]">Intelligence Weekly</h4>
-            <p className="text-gray-500 text-sm font-light">Join 50k+ marketers receiving our exclusive strategy reports.</p>
-            <div className="flex gap-2">
-               <input type="text" placeholder="Email" className="flex-1 bg-gray-950 border border-white/10 rounded-xl px-5 py-3 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500/50" />
-               <button className="bg-purple-600 hover:bg-purple-500 px-4 rounded-xl transition-all active:scale-95">
-                  <Mail className="w-5 h-5 text-white" />
-               </button>
-            </div>
-          </div>
-        </div>
-        <div className="max-w-7xl mx-auto mt-32 pt-10 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6 text-gray-600 text-[10px] uppercase font-black tracking-[0.3em]">
-           <p>© 2024 SproutPulse Inc. Designed for creators.</p>
-           <div className="flex gap-12">
-              <span className="hover:text-white transition-colors cursor-pointer">Security</span>
-              <span className="hover:text-white transition-colors cursor-pointer">Terms</span>
-              <span className="hover:text-white transition-colors cursor-pointer">SLA</span>
-           </div>
-        </div>
-      </footer>
+                        <div className="mt-12 grid max-w-xl grid-cols-3 gap-4">
+                            {metrics.map((metric) => (
+                                <div
+                                    key={metric.label}
+                                    className="rounded-2xl border border-white/10 bg-white/[0.03] p-5"
+                                >
+                                    <p className="text-2xl font-semibold text-white">{metric.value}</p>
+                                    <p className="mt-1 text-xs leading-5 text-gray-500">{metric.label}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </motion.div>
 
-    </div>
-  )
+                    <motion.div
+                        initial={{ opacity: 0, y: 28, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        transition={{ duration: 0.8, delay: 0.1 }}
+                        className="relative"
+                    >
+                        <div className="absolute -inset-4 rounded-[2rem] bg-purple-500/10 blur-3xl" />
+                        <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-gray-900/80 p-4 shadow-2xl shadow-black/40 backdrop-blur-xl">
+                            <div className="rounded-[1.5rem] border border-white/10 bg-gray-950/90 p-5">
+                                <div className="mb-6 flex items-center justify-between border-b border-white/10 pb-5">
+                                    <div>
+                                        <p className="text-sm font-semibold text-white">Operations dashboard</p>
+                                        <p className="text-xs text-gray-500">Live publishing and messaging queue</p>
+                                    </div>
+                                    <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300">
+                                        Online
+                                    </span>
+                                </div>
+
+                                <div className="grid gap-4 md:grid-cols-3">
+                                    {[
+                                        { label: "Pending", value: "18", icon: Clock },
+                                        { label: "Posted", value: "126", icon: Check },
+                                        { label: "Failed", value: "03", icon: RefreshCw },
+                                    ].map((item) => (
+                                        <div
+                                            key={item.label}
+                                            className="rounded-2xl border border-white/10 bg-white/[0.03] p-4"
+                                        >
+                                            <item.icon className="mb-4 h-5 w-5 text-purple-300" />
+                                            <p className="text-2xl font-semibold text-white">{item.value}</p>
+                                            <p className="text-xs text-gray-500">{item.label}</p>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="mt-5 space-y-3">
+                                    {[
+                                        { title: "Launch update", channel: "Twitter / X", status: "Ready" },
+                                        { title: "Product reminder", channel: "WhatsApp", status: "Queued" },
+                                        { title: "Community post", channel: "Threads", status: "Scheduled" },
+                                    ].map((item) => (
+                                        <div
+                                            key={item.title}
+                                            className="flex items-center justify-between gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4"
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10 text-purple-300">
+                                                    <RadioTower className="h-5 w-5" />
+                                                </span>
+                                                <div>
+                                                    <p className="text-sm font-medium text-white">{item.title}</p>
+                                                    <p className="text-xs text-gray-500">{item.channel}</p>
+                                                </div>
+                                            </div>
+                                            <span className="rounded-full bg-white/5 px-3 py-1 text-xs text-gray-300">
+                                                {item.status}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                                    <div className="mb-4 flex items-center justify-between">
+                                        <p className="text-sm font-medium text-white">Channel health</p>
+                                        <Activity className="h-4 w-4 text-emerald-300" />
+                                    </div>
+                                    <div className="space-y-3">
+                                        {platforms.slice(0, 3).map((platform, index) => (
+                                            <div
+                                                key={platform.name}
+                                                className="grid grid-cols-[110px_1fr_44px] items-center gap-3 text-xs"
+                                            >
+                                                <span className="text-gray-400">{platform.name}</span>
+                                                <span className="h-2 overflow-hidden rounded-full bg-white/5">
+                                                    <span
+                                                        className="block h-full rounded-full bg-purple-500"
+                                                        style={{ width: `${86 - index * 12}%` }}
+                                                    />
+                                                </span>
+                                                <span className="text-right text-gray-500">OK</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </motion.div>
+                </div>
+            </section>
+
+            <section
+                id="overview"
+                className="relative z-10 border-y border-white/10 bg-white/[0.02] px-5 py-24 md:px-8"
+            >
+                <div className="mx-auto max-w-7xl">
+                    <div className="mb-12 flex flex-col justify-between gap-5 md:flex-row md:items-end">
+                        <div>
+                            <p className="mb-3 text-sm font-semibold uppercase tracking-[0.25em] text-purple-300">
+                                Product overview
+                            </p>
+                            <h2 className="max-w-3xl text-4xl font-semibold tracking-[-0.04em] text-white md:text-5xl">
+                                A cleaner structure for the work your app already handles.
+                            </h2>
+                        </div>
+                        <p className="max-w-md text-sm leading-6 text-gray-400">
+                            The main dashboard stays focused on combined activity, while each channel keeps its own
+                            professional management area.
+                        </p>
+                    </div>
+
+                    <div className="grid gap-5 lg:grid-cols-3">
+                        {features.map((feature, index) => (
+                            <motion.div
+                                key={feature.title}
+                                initial={{ opacity: 0, y: 24 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                viewport={{ once: true }}
+                                transition={{ delay: index * 0.08 }}
+                                className="rounded-[2rem] border border-white/10 bg-gray-900/60 p-7 shadow-xl shadow-black/20"
+                            >
+                                <div className="mb-8 flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-500/10 text-purple-300">
+                                    <feature.icon className="h-6 w-6" />
+                                </div>
+                                <h3 className="text-xl font-semibold text-white">{feature.title}</h3>
+                                <p className="mt-3 min-h-20 text-sm leading-6 text-gray-400">{feature.description}</p>
+                                <div className="mt-7 space-y-3">
+                                    {feature.points.map((point) => (
+                                        <div key={point} className="flex items-center gap-3 text-sm text-gray-300">
+                                            <Check className="h-4 w-4 text-emerald-300" />
+                                            {point}
+                                        </div>
+                                    ))}
+                                </div>
+                            </motion.div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+            <section id="workflow" className="relative z-10 px-5 py-24 md:px-8">
+                <div className="mx-auto max-w-7xl">
+                    <div className="mx-auto mb-14 max-w-3xl text-center">
+                        <p className="mb-3 text-sm font-semibold uppercase tracking-[0.25em] text-purple-300">
+                            Workflow
+                        </p>
+                        <h2 className="text-4xl font-semibold tracking-[-0.04em] text-white md:text-5xl">
+                            Simple enough for daily use. Structured enough for serious operations.
+                        </h2>
+                    </div>
+
+                    <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+                        {workflow.map((step, index) => (
+                            <motion.div
+                                key={step.title}
+                                initial={{ opacity: 0, y: 20 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                viewport={{ once: true }}
+                                transition={{ delay: index * 0.08 }}
+                                className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.03] p-6"
+                            >
+                                <span className="absolute right-5 top-4 text-5xl font-semibold text-white/[0.03]">
+                                    0{index + 1}
+                                </span>
+                                <div className="mb-8 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5 text-purple-300">
+                                    <step.icon className="h-6 w-6" />
+                                </div>
+                                <h3 className="text-lg font-semibold text-white">{step.title}</h3>
+                                <p className="mt-3 text-sm leading-6 text-gray-400">{step.description}</p>
+                            </motion.div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+            <section id="platforms" className="relative z-10 bg-gray-900/40 px-5 py-24 md:px-8">
+                <div className="mx-auto max-w-7xl">
+                    <div className="mb-12 grid gap-8 lg:grid-cols-[0.75fr_1fr] lg:items-end">
+                        <div>
+                            <p className="mb-3 text-sm font-semibold uppercase tracking-[0.25em] text-purple-300">
+                                Platforms
+                            </p>
+                            <h2 className="text-4xl font-semibold tracking-[-0.04em] text-white md:text-5xl">
+                                Keep each channel professional and separate.
+                            </h2>
+                        </div>
+                        <p className="text-sm leading-6 text-gray-400">
+                            The landing page should reflect the real product: a multi-account manager with clear
+                            platform boundaries, not a generic AI marketing template.
+                        </p>
+                    </div>
+
+                    <div className="grid gap-5 md:grid-cols-2">
+                        {platforms.map((platform) => (
+                            <motion.div
+                                key={platform.name}
+                                initial={{ opacity: 0, y: 18 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                viewport={{ once: true }}
+                                className="rounded-[2rem] border border-white/10 bg-gray-950/60 p-6"
+                            >
+                                <div className="flex items-start justify-between gap-5">
+                                    <div className="flex items-center gap-4">
+                                        <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5 text-white">
+                                            <platform.icon className="h-6 w-6" />
+                                        </span>
+                                        <div>
+                                            <h3 className="font-semibold text-white">{platform.name}</h3>
+                                            <p className="mt-1 text-xs font-medium text-emerald-300">
+                                                {platform.status}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <p className="mt-5 text-sm leading-6 text-gray-400">{platform.description}</p>
+                            </motion.div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+            <section id="security" className="relative z-10 px-5 py-24 md:px-8">
+                <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+                    <div>
+                        <p className="mb-3 text-sm font-semibold uppercase tracking-[0.25em] text-purple-300">
+                            Security and control
+                        </p>
+                        <h2 className="text-4xl font-semibold tracking-[-0.04em] text-white md:text-5xl">
+                            Built around operational clarity, not visual noise.
+                        </h2>
+                        <p className="mt-6 text-sm leading-7 text-gray-400">
+                            The interface gives teams a serious first impression: clear actions, visible account status,
+                            safe credential handling expectations, and no fake marketing claims.
+                        </p>
+                        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                            <button
+                                type="button"
+                                onClick={() => router.push("/login")}
+                                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-6 py-4 text-sm font-semibold text-gray-950 transition-all hover:bg-gray-200 active:scale-95"
+                            >
+                                Open workspace
+                                <ArrowRight className="h-4 w-4" />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => router.push("/signup")}
+                                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-sm font-semibold text-white transition-all hover:bg-white/10 active:scale-95"
+                            >
+                                Create account
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="grid gap-5 md:grid-cols-2">
+                        {[
+                            {
+                                icon: ShieldCheck,
+                                title: "Credential awareness",
+                                text: "Platform keys and tokens are treated as operational assets, not UI decoration.",
+                            },
+                            {
+                                icon: LockKeyhole,
+                                title: "Controlled access",
+                                text: "Authentication pages keep users separate from dashboard workflows.",
+                            },
+                            {
+                                icon: Workflow,
+                                title: "Conflict handling",
+                                text: "Each platform keeps its own rules, limits, and publishing flow.",
+                            },
+                            {
+                                icon: Smartphone,
+                                title: "Responsive workspace",
+                                text: "The landing page and dashboard stay usable across common screen sizes.",
+                            },
+                        ].map((item) => (
+                            <div key={item.title} className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-6">
+                                <item.icon className="mb-6 h-6 w-6 text-purple-300" />
+                                <h3 className="font-semibold text-white">{item.title}</h3>
+                                <p className="mt-3 text-sm leading-6 text-gray-400">{item.text}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+            <section className="relative z-10 px-5 pb-24 md:px-8">
+                <div className="mx-auto max-w-7xl overflow-hidden rounded-[2rem] border border-white/10 bg-purple-600/10 p-8 md:p-12">
+                    <div className="grid gap-8 lg:grid-cols-[1fr_0.8fr] lg:items-center">
+                        <div>
+                            <p className="mb-3 text-sm font-semibold uppercase tracking-[0.25em] text-purple-200">
+                                Operations included
+                            </p>
+                            <h2 className="text-3xl font-semibold tracking-[-0.03em] text-white md:text-4xl">
+                                A landing page that now matches the real application.
+                            </h2>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            {operations.map((item) => (
+                                <div
+                                    key={item}
+                                    className="rounded-2xl border border-white/10 bg-gray-950/40 px-4 py-3 text-sm text-gray-300"
+                                >
+                                    {item}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <footer className="relative z-10 border-t border-white/10 bg-gray-950 px-5 py-12 md:px-8">
+                <div className="mx-auto flex max-w-7xl flex-col gap-8 md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <div className="flex items-center gap-3">
+                            <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
+                                <Share2 className="h-5 w-5 text-purple-300" />
+                            </span>
+                            <span className="text-lg font-semibold text-white">Account Manager</span>
+                        </div>
+                        <p className="mt-4 max-w-md text-sm leading-6 text-gray-500">
+                            A professional workspace for managing social publishing and WhatsApp Business messaging
+                            across multiple accounts.
+                        </p>
+                    </div>
+
+                    <div className="flex items-center gap-5 text-gray-500">
+                        <Twitter className="h-5 w-5 transition-colors hover:text-white" />
+                        <Github className="h-5 w-5 transition-colors hover:text-white" />
+                        <Linkedin className="h-5 w-5 transition-colors hover:text-white" />
+                        <Mail className="h-5 w-5 transition-colors hover:text-white" />
+                    </div>
+                </div>
+            </footer>
+        </main>
+    );
 }

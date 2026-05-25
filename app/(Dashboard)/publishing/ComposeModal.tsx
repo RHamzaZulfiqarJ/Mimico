@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Calendar, CheckCircle2, Clock, Loader2, Send, X } from "lucide-react";
 import { PLATFORMS } from "@/libs/platform";
+import { PLATFORM_RULES } from "@/libs/platform-rules";
 
 type SocialAccount = {
     id: string;
@@ -16,7 +17,7 @@ type ComposeModalProps = {
     setSelectedAccounts: (accounts: string[] | ((prev: string[]) => string[])) => void;
     isOpen: boolean;
     onClose: () => void;
-    defaultPlatform?: "twitter" | "mastodon" | "all";
+    defaultPlatform?: keyof typeof PLATFORMS | "all";
 };
 
 const MAX_TWITTER_LENGTH = 280;
@@ -66,25 +67,30 @@ export default function ComposeModal({
     const [error, setError] = useState<string | null>(null);
     const [successText, setSuccessText] = useState<string | null>(null);
 
+    const SOCIAL_PLATFORMS = ["twitter", "mastodon", "threads"] as const;
+
     const filteredAccounts = useMemo(() => {
         const socialAccounts = accounts.filter((account) => {
-            return account.platform === "twitter" || account.platform === "mastodon";
+            return SOCIAL_PLATFORMS.includes(account.platform as (typeof SOCIAL_PLATFORMS)[number]);
         });
 
-        if (defaultPlatform === "twitter") {
-            return socialAccounts.filter((account) => account.platform === "twitter");
-        }
-
-        if (defaultPlatform === "mastodon") {
-            return socialAccounts.filter((account) => account.platform === "mastodon");
+        if (defaultPlatform !== "all") {
+            return socialAccounts.filter((account) => account.platform === defaultPlatform);
         }
 
         return socialAccounts;
     }, [accounts, defaultPlatform]);
 
-    const selectedAccountObjects = useMemo(() => {
-        return filteredAccounts.filter((account) => selectedAccounts.includes(account.id));
-    }, [filteredAccounts, selectedAccounts]);
+    const selectedAccountObjects = accounts.filter((account) => selectedAccounts.includes(account.id));
+
+    const activeLimit =
+        selectedAccountObjects.length > 0
+            ? Math.min(
+                  ...selectedAccountObjects.map(
+                      (account) => PLATFORM_RULES[account.platform as keyof typeof PLATFORM_RULES]?.maxLength || 10000,
+                  ),
+              )
+            : 10000;
 
     const selectedPlatforms = useMemo(() => {
         return Array.from(new Set(selectedAccountObjects.map((account) => account.platform)));
@@ -94,8 +100,9 @@ export default function ComposeModal({
         return getPlatformLimit(selectedPlatforms);
     }, [selectedPlatforms]);
 
-    const remainingCharacters = characterLimit - content.length;
+    const remainingCharacters = activeLimit - content.length;
     const isOverLimit = remainingCharacters < 0;
+    const isContentTooLong = remainingCharacters < 0;
 
     const minScheduleDateTime = useMemo(() => {
         return getMinScheduleDateTime();
@@ -114,7 +121,7 @@ export default function ComposeModal({
             const data = await res.json();
 
             const socialOnly = (data.accounts || []).filter((account: SocialAccount) => {
-                return account.platform === "twitter" || account.platform === "mastodon";
+                return SOCIAL_PLATFORMS.includes(account.platform as (typeof SOCIAL_PLATFORMS)[number]);
             });
 
             setAccounts(socialOnly);
@@ -238,6 +245,11 @@ export default function ComposeModal({
 
             validatePost(true);
 
+            if (new Date(scheduleAt) <= new Date(Date.now() + 60 * 1000)) {
+                setError("Schedule time must be at least 1 minute in the future");
+                return;
+            }
+
             const data = await createPost(new Date(scheduleAt).toISOString());
 
             setSuccessText(`${data.created || selectedAccounts.length} post(s) scheduled`);
@@ -285,7 +297,7 @@ export default function ComposeModal({
                                     </div>
                                     Compose Social Post
                                 </h2>
-                                <p className="text-sm text-gray-400 mt-1">Publish to Twitter/X and Mastodon only.</p>
+                                <p className="text-sm text-gray-400 mt-1">Publish to Twitter/X, Mastodon, and Instagram Threads.</p>
                             </div>
 
                             <button
@@ -331,7 +343,7 @@ export default function ComposeModal({
                                     <div className="rounded-2xl bg-amber-500/10 border border-amber-500/20 p-5">
                                         <p className="font-bold text-amber-200">No social publishing account found</p>
                                         <p className="text-sm text-amber-100/80 mt-1">
-                                            Connect Twitter or Mastodon from their platform pages first.
+                                            Connect Twitter, Mastodon, or Instagram Threads first.
                                         </p>
                                     </div>
                                 ) : (
@@ -399,6 +411,16 @@ export default function ComposeModal({
                                     className="w-full h-48 bg-gray-950/70 border border-white/10 rounded-2xl p-5 text-gray-100 placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500/20 resize-none leading-relaxed"
                                 />
 
+                                <div className="flex items-center justify-between mt-2">
+                                    <p className="text-xs text-gray-500">Limit is based on selected platforms.</p>
+
+                                    <p
+                                        className={`text-xs font-semibold ${isContentTooLong ? "text-red-400" : "text-gray-400"}`}
+                                    >
+                                        {remainingCharacters} characters left
+                                    </p>
+                                </div>
+
                                 <div className="flex flex-wrap items-center gap-2 mt-3 text-xs text-gray-500">
                                     <span>Twitter limit: {MAX_TWITTER_LENGTH}</span>
                                     <span>•</span>
@@ -431,8 +453,7 @@ export default function ComposeModal({
                                     <div>
                                         <p className="font-bold text-white">How posting works</p>
                                         <p className="text-sm text-gray-400 mt-1">
-                                            Post Now queues the post for immediate cron processing. Schedule saves it
-                                            for future publishing.
+                                            Post Now publishes immediately. Schedule saves it for future cron publishing.
                                         </p>
                                     </div>
                                 </div>
@@ -441,7 +462,7 @@ export default function ComposeModal({
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                                 <button
                                     type="button"
-                                    disabled={loading}
+                                    disabled={loading || isContentTooLong}
                                     onClick={() => {
                                         setShowScheduler((current) => !current);
                                         setError(null);
@@ -455,7 +476,7 @@ export default function ComposeModal({
                                 {showScheduler ? (
                                     <button
                                         type="button"
-                                        disabled={loading || !scheduleAt}
+                                        disabled={!scheduleAt || loading || isContentTooLong}
                                         onClick={handleSchedule}
                                         className="flex items-center justify-center gap-3 bg-purple-600 hover:bg-purple-500 text-white font-bold py-4 rounded-2xl shadow-xl shadow-purple-600/20 disabled:opacity-50 transition-all"
                                     >
@@ -469,7 +490,7 @@ export default function ComposeModal({
                                 ) : (
                                     <button
                                         type="button"
-                                        disabled={loading}
+                                        disabled={loading || isContentTooLong}
                                         onClick={handlePostNow}
                                         className="flex items-center justify-center gap-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-2xl shadow-xl shadow-emerald-600/20 disabled:opacity-50 transition-all"
                                     >

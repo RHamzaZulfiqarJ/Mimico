@@ -66,28 +66,40 @@ export async function GET(req: Request) {
       return NextResponse.redirect(`${appUrl}/mastodon?error=profile_fetch_failed`);
     }
 
-    await prisma.socialAccount.upsert({
+    const existing = await prisma.socialAccount.findUnique({
       where: {
         platform_accountId: {
           platform: "mastodon",
           accountId: profile.id,
         },
       },
-      update: {
-        accountUsername: profile.username,
-        accessToken,
-        instanceUrl: instance,
-        userId: payload.id,
-      },
-      create: {
-        platform: "mastodon",
-        accountId: profile.id,
-        accountUsername: profile.username,
-        accessToken,
-        instanceUrl: instance,
-        userId: payload.id,
-      },
     });
+
+    if (existing && existing.userId !== payload.id) {
+      return NextResponse.redirect(`${appUrl}/mastodon?error=account_in_use`);
+    }
+
+    if (existing) {
+      await prisma.socialAccount.update({
+        where: { id: existing.id },
+        data: {
+          accountUsername: profile.username,
+          accessToken,
+          instanceUrl: instance,
+        },
+      });
+    } else {
+      await prisma.socialAccount.create({
+        data: {
+          platform: "mastodon",
+          accountId: profile.id,
+          accountUsername: profile.username,
+          accessToken,
+          instanceUrl: instance,
+          userId: payload.id,
+        },
+      });
+    }
 
     return NextResponse.redirect(`${appUrl}/mastodon?connected=true`);
   } catch (error) {

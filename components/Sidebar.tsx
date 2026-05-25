@@ -10,7 +10,7 @@ import {
   MessageCircle,
 } from "lucide-react"
 import { BsTwitterX } from "react-icons/bs"
-import { SiMastodon } from "react-icons/si"
+import { SiMastodon, SiThreads } from "react-icons/si"
 import { usePathname, useRouter } from "next/navigation"
 
 const navItems = [
@@ -18,6 +18,7 @@ const navItems = [
   { href: "/publishing", label: "Publishing", icon: CalendarClock },
   { href: "/twitter", label: "Twitter / X", icon: BsTwitterX },
   { href: "/mastodon", label: "Mastodon", icon: SiMastodon },
+  { href: "/threads", label: "Threads", icon: SiThreads },
   { href: "/whatsapp", label: "WhatsApp", icon: MessageCircle },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
 ]

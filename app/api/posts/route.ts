@@ -4,15 +4,9 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/libs/prisma";
 import { verifyToken } from "@/libs/jwt";
-import { publishSocialPost } from "@/libs/social-publisher";
-
-const getErrorMessage = (error: unknown) => {
-    if (error instanceof Error) {
-        return error.message;
-    }
-
-    return "Something went wrong";
-};
+import { createPostSchema } from "@/libs/validation";
+import { getPlatformLimit, isSupportedPlatform, PLATFORM_RULES } from "@/libs/platform-rules";
+import { publishToAccount } from "@/libs/publishers";
 
 export async function POST(req: Request) {
     try {
@@ -25,130 +19,154 @@ export async function POST(req: Request) {
 
         const payload = verifyToken(token);
         const body = await req.json();
-        const { content, scheduledAt, accountIds } = body;
+        const parsed = createPostSchema.safeParse(body);
 
-        if (!content || !Array.isArray(accountIds) || accountIds.length === 0) {
-            return NextResponse.json({ error: "Invalid request data" }, { status: 400 });
+        if (!parsed.success) {
+            return NextResponse.json(
+                {
+                    error: "Invalid request data",
+                    details: parsed.error.flatten().fieldErrors,
+                },
+                { status: 400 },
+            );
+        }
+
+        const { content, scheduledAt } = parsed.data;
+        const uniqueAccountIds = [...new Set(parsed.data.accountIds)];
+
+        if (uniqueAccountIds.length !== parsed.data.accountIds.length) {
+            return NextResponse.json({ error: "Duplicate accounts selected" }, { status: 409 });
         }
 
         const accounts = await prisma.socialAccount.findMany({
             where: {
-                id: { in: accountIds },
+                id: { in: uniqueAccountIds },
                 userId: payload.id,
-                platform: { in: ["twitter", "mastodon"] },
             },
         });
 
-        if (accounts.length !== accountIds.length) {
-            return NextResponse.json({ error: "One or more accounts invalid" }, { status: 403 });
+        if (accounts.length !== uniqueAccountIds.length) {
+            return NextResponse.json({ error: "One or more selected accounts are invalid" }, { status: 403 });
         }
 
-        if (scheduledAt) {
-            const scheduleDate = new Date(scheduledAt);
+        const unsupported = accounts.find((account) => !isSupportedPlatform(account.platform));
 
-            if (Number.isNaN(scheduleDate.getTime()) || scheduleDate.getTime() <= Date.now()) {
-                return NextResponse.json({ error: "Schedule time must be in the future" }, { status: 400 });
+        if (unsupported) {
+            return NextResponse.json(
+                { error: `${unsupported.platform} is not supported for publishing yet` },
+                { status: 400 },
+            );
+        }
+
+        const limitErrors = accounts
+            .map((account) => {
+                const limit = getPlatformLimit(account.platform);
+
+                if (limit && content.length > limit) {
+                    return `${PLATFORM_RULES[account.platform as keyof typeof PLATFORM_RULES].label} allows ${limit} characters maximum`;
+                }
+
+                return null;
+            })
+            .filter(Boolean);
+
+        if (limitErrors.length > 0) {
+            return NextResponse.json(
+                {
+                    error: "Content does not match selected platform rules",
+                    details: limitErrors,
+                },
+                { status: 400 },
+            );
+        }
+
+        const now = new Date();
+        const scheduledDate = scheduledAt ? new Date(scheduledAt) : now;
+        const shouldPublishNow = !scheduledAt;
+
+        if (scheduledAt && scheduledDate <= new Date(Date.now() + 60 * 1000)) {
+            return NextResponse.json(
+                { error: "Schedule time must be at least 1 minute in the future" },
+                { status: 400 },
+            );
+        }
+
+        const results = [];
+
+        for (const account of accounts) {
+            const post = await prisma.scheduledPost.create({
+                data: {
+                    content,
+                    scheduledAt: scheduledDate,
+                    status: shouldPublishNow ? "processing" : "pending",
+                    socialAccountId: account.id,
+                },
+            });
+
+            if (!shouldPublishNow) {
+                results.push({
+                    id: post.id,
+                    platform: account.platform,
+                    status: "pending",
+                });
+
+                continue;
             }
 
-            await prisma.scheduledPost.createMany({
-                data: accounts.map((account) => ({
-                    content,
-                    scheduledAt: scheduleDate,
-                    status: "pending",
-                    socialAccountId: account.id,
-                })),
-            });
+            try {
+                await publishToAccount(account, content);
 
-            return NextResponse.json({
-                success: true,
-                mode: "scheduled",
-                created: accounts.length,
-            });
-        }
-
-        const results = await Promise.all(
-            accounts.map(async (account) => {
-                const post = await prisma.scheduledPost.create({
+                await prisma.scheduledPost.update({
+                    where: { id: post.id },
                     data: {
-                        content,
-                        scheduledAt: new Date(),
-                        status: "processing",
-                        socialAccountId: account.id,
+                        status: "posted",
+                        postedAt: new Date(),
                         lastAttemptAt: new Date(),
                     },
                 });
 
-                try {
-                    await publishSocialPost(account, content);
+                results.push({
+                    id: post.id,
+                    platform: account.platform,
+                    status: "posted",
+                });
+            } catch (err: any) {
+                await prisma.scheduledPost.update({
+                    where: { id: post.id },
+                    data: {
+                        status: "failed",
+                        errorMessage: err.message || "Publishing failed",
+                        lastAttemptAt: new Date(),
+                    },
+                });
 
-                    await prisma.scheduledPost.update({
-                        where: { id: post.id },
-                        data: {
-                            status: "posted",
-                            postedAt: new Date(),
-                            errorMessage: null,
-                        },
-                    });
-
-                    return {
-                        id: post.id,
-                        success: true,
-                        accountUsername: account.accountUsername,
-                        platform: account.platform,
-                    };
-                } catch (error) {
-                    const message = getErrorMessage(error);
-
-                    await prisma.scheduledPost.update({
-                        where: { id: post.id },
-                        data: {
-                            status: "failed",
-                            errorMessage: message,
-                            retryCount: { increment: 1 },
-                        },
-                    });
-
-                    return {
-                        id: post.id,
-                        success: false,
-                        accountUsername: account.accountUsername,
-                        platform: account.platform,
-                        error: message,
-                    };
-                }
-            }),
-        );
-
-        const posted = results.filter((result) => result.success).length;
-        const failed = results.length - posted;
-
-        if (posted === 0) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    mode: "immediate",
-                    posted,
-                    failed,
-                    results,
-                    error: results[0]?.error || "Failed to publish post",
-                },
-                { status: 500 },
-            );
+                results.push({
+                    id: post.id,
+                    platform: account.platform,
+                    status: "failed",
+                    error: err.message || "Publishing failed",
+                });
+            }
         }
+
+        const failed = results.filter((result) => result.status === "failed");
+        const posted = results.filter((result) => result.status === "posted").length;
+        const created = results.filter((result) => result.status === "pending").length;
 
         return NextResponse.json(
             {
-                success: failed === 0,
-                mode: "immediate",
-                created: results.length,
+                success: failed.length === 0,
                 posted,
-                failed,
+                failed: failed.length,
+                created,
                 results,
             },
-            { status: failed > 0 ? 207 : 200 },
+            { status: failed.length > 0 ? 207 : 200 },
         );
     } catch (error) {
-        return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
+        console.error("CREATE POST ERROR:", error);
+
+        return NextResponse.json({ error: "Failed to create posts" }, { status: 500 });
     }
 }
 
@@ -172,7 +190,6 @@ export async function GET() {
             include: {
                 socialAccount: {
                     select: {
-                        id: true,
                         accountUsername: true,
                         platform: true,
                     },

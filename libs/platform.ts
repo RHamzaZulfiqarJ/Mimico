@@ -1,4 +1,5 @@
 import { BsTwitterX, BsMastodon } from "react-icons/bs";
+import { SiThreads } from "react-icons/si";
 
 export const PLATFORMS = {
   twitter: {
@@ -10,5 +11,10 @@ export const PLATFORMS = {
     name: "Mastodon",
     icon: BsMastodon,
     color: "text-indigo-500",
+  },
+  threads: {
+    name: "Instagram Threads",
+    icon: SiThreads,
+    color: "text-white",
   },
 };

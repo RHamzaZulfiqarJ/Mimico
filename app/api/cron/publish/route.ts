@@ -2,15 +2,7 @@ export const runtime = "nodejs";
 
 import { prisma } from "@/libs/prisma";
 import { NextResponse } from "next/server";
-import { publishSocialPost } from "@/libs/social-publisher";
-
-const getErrorMessage = (error: unknown) => {
-    if (error instanceof Error) {
-        return error.message;
-    }
-
-    return "Something went wrong";
-};
+import { publishToAccount } from "@/libs/publishers";
 
 export async function GET(req: Request) {
     const auth = req.headers.get("authorization");
@@ -29,14 +21,13 @@ export async function GET(req: Request) {
         include: {
             socialAccount: true,
         },
-        take: 20,
+        take: 25,
         orderBy: {
             scheduledAt: "asc",
         },
     });
 
-    let posted = 0;
-    let failed = 0;
+    const results = [];
 
     for (const post of posts) {
         const locked = await prisma.scheduledPost.updateMany({
@@ -50,12 +41,10 @@ export async function GET(req: Request) {
             },
         });
 
-        if (locked.count === 0) {
-            continue;
-        }
+        if (locked.count === 0) continue;
 
         try {
-            await publishSocialPost(post.socialAccount, post.content);
+            await publishToAccount(post.socialAccount, post.content);
 
             await prisma.scheduledPost.update({
                 where: { id: post.id },
@@ -66,24 +55,35 @@ export async function GET(req: Request) {
                 },
             });
 
-            posted++;
-        } catch (error) {
+            results.push({
+                id: post.id,
+                platform: post.socialAccount.platform,
+                status: "posted",
+            });
+        } catch (err: any) {
+            const retryCount = post.retryCount + 1;
+            const shouldRetry = retryCount < 3;
+
             await prisma.scheduledPost.update({
                 where: { id: post.id },
                 data: {
-                    status: "failed",
-                    errorMessage: getErrorMessage(error),
-                    retryCount: { increment: 1 },
+                    status: shouldRetry ? "pending" : "failed",
+                    retryCount,
+                    errorMessage: err.message || "Publishing failed",
                 },
             });
 
-            failed++;
+            results.push({
+                id: post.id,
+                platform: post.socialAccount.platform,
+                status: shouldRetry ? "retrying" : "failed",
+                error: err.message || "Publishing failed",
+            });
         }
     }
 
     return NextResponse.json({
-        processed: posts.length,
-        posted,
-        failed,
+        processed: results.length,
+        results,
     });
 }
