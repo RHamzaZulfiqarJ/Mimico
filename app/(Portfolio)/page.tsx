@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { BsTwitterX } from "react-icons/bs";
 import { SiMastodon, SiThreads, SiWhatsapp } from "react-icons/si";
+import AppLogo from "@/components/AppLogo";
 
 type NavItem = {
     label: string;
@@ -610,10 +611,8 @@ export default function LandingPage() {
                 <div className="mx-auto flex max-w-7xl flex-col gap-8 md:flex-row md:items-center md:justify-between">
                     <div>
                         <div className="flex items-center gap-3">
-                            <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
-                                <Share2 className="h-5 w-5 text-purple-300" />
-                            </span>
-                            <span className="text-lg font-semibold text-white">Account Manager</span>
+                            <AppLogo size="md" />
+                            <span className="text-lg font-semibold text-white">MIMICO - Social Account Manager</span>
                         </div>
                         <p className="mt-4 max-w-md text-sm leading-6 text-gray-500">
                             A professional workspace for managing social publishing and WhatsApp Business messaging

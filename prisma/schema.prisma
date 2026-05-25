@@ -22,17 +22,22 @@ enum WhatsAppMessageDirection {
 }
 
 model User {
-  id                        String                     @id @default(uuid())
-  firstName                 String
-  lastName                  String
-  email                     String                     @unique
-  password                  String?
-  provider                  String?
-  providerId                String?
-  createdAt                 DateTime                   @default(now())
-  socialAccounts            SocialAccount[]
-  whatsAppContacts          WhatsAppContact[]
-  whatsAppScheduledMessages WhatsAppScheduledMessage[]
+  id                          String                     @id @default(uuid())
+  firstName                   String
+  lastName                    String
+  email                       String                     @unique
+  password                    String?
+  provider                    String?
+  providerId                  String?
+  passwordResetToken          String?
+  passwordResetTokenExpiresAt DateTime?
+  passwordResetRequestedAt    DateTime?
+  createdAt                   DateTime                   @default(now())
+  socialAccounts              SocialAccount[]
+  whatsAppContacts            WhatsAppContact[]
+  whatsAppScheduledMessages   WhatsAppScheduledMessage[]
+
+  @@index([passwordResetToken])
 }
 
 model SocialAccount {

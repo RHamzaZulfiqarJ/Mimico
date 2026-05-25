@@ -4,9 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { FaGoogle } from "react-icons/fa";
-import { ArrowLeft, ArrowRight, Lock, Mail } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
-import Image from "next/image";
+import AppLogo from "@/components/AppLogo";
 
 export default function LoginPage() {
     const router = useRouter();
@@ -68,16 +68,7 @@ export default function LoginPage() {
                         onClick={() => router.push("/")}
                         className="mb-6 flex items-center gap-3 text-left"
                     >
-                        <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-md border border-[var(--border)] bg-[var(--surface-3)] shadow-[var(--shadow-line)]">
-                            <Image
-                                src="/android-chrome-192x192.png"
-                                alt="MIMICO Logo"
-                                width={32}
-                                height={32}
-                                className="h-8 w-8 object-contain"
-                                priority
-                            />
-                        </span>
+                        <AppLogo size="lg" />
 
                         <span>
                             <span className="block text-sm font-semibold tracking-[-0.02em] text-[var(--text)]">
@@ -114,6 +105,7 @@ export default function LoginPage() {
 
                             <button
                                 type="button"
+                                onClick={() => router.push("/forgot-password")}
                                 className="text-xs font-medium text-[var(--accent)] hover:text-[var(--accent-hover)]"
                             >
                                 Forgot password?

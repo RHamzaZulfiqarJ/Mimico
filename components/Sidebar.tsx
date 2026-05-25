@@ -5,6 +5,7 @@ import { BarChart3, CalendarClock, ChevronRight, LayoutDashboard, MessageCircle,
 import { BsTwitterX } from "react-icons/bs";
 import { SiMastodon, SiThreads } from "react-icons/si";
 import { usePathname, useRouter } from "next/navigation";
+import AppLogo from "./AppLogo";
 
 const navItems = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -33,9 +34,7 @@ export default function Sidebar() {
                     onClick={() => router.push("/dashboard")}
                     className="group flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left hover:bg-[var(--surface-hover)]"
                 >
-                    <span className="flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(255,255,255,0.1)] bg-[var(--accent)] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.16)]">
-                        <Share2 className="h-4 w-4" strokeWidth={1.5} />
-                    </span>
+                    <AppLogo size="lg" />
 
                     <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-semibold tracking-[-0.02em] text-[var(--text)]">

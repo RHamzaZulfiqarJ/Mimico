@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { FaGoogle } from "react-icons/fa";
 import { ArrowLeft, ArrowRight, Check, Lock, Mail, Share2, User } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
+import AppLogo from "@/components/AppLogo";
 
 export default function SignupPage() {
     const router = useRouter();
@@ -69,9 +70,7 @@ export default function SignupPage() {
                         onClick={() => router.push("/")}
                         className="mb-6 flex items-center gap-3 text-left"
                     >
-                        <span className="flex h-10 w-10 items-center justify-center rounded-md border border-[rgba(255,255,255,0.1)] bg-[var(--accent)] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.16)]">
-                            <Share2 className="h-5 w-5" strokeWidth={1.5} />
-                        </span>
+                        <AppLogo size="lg" />
 
                         <span>
                             <span className="block text-sm font-semibold tracking-[-0.02em] text-[var(--text)]">

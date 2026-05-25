@@ -424,11 +424,6 @@ export default function Navbar() {
 
             <div className="mx-4 hidden max-w-xl flex-1 lg:block">
                 <div className="group relative">
-                    <Search
-                        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)] group-focus-within:text-[var(--accent)]"
-                        strokeWidth={1.5}
-                    />
-
                     <input
                         type="text"
                         placeholder="Search posts, contacts, accounts..."
@@ -478,12 +473,12 @@ export default function Navbar() {
                                         type="button"
                                         onClick={loadNotifications}
                                         disabled={notificationsLoading}
-                                        className="linear-button-secondary h-8 w-8 p-0"
+                                        className="linear-button-secondary h-8 w-10 p-0"
                                     >
                                         {notificationsLoading ? (
-                                            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
+                                            <Loader2 className="h-6 w-6 animate-spin" strokeWidth={2} />
                                         ) : (
-                                            <RefreshCw className="h-4 w-4" strokeWidth={1.5} />
+                                            <RefreshCw className="h-6 w-6" strokeWidth={1.5} />
                                         )}
                                     </button>
 
@@ -599,10 +594,6 @@ export default function Navbar() {
                         <span className="hidden min-w-0 text-left md:block">
                             <span className="block max-w-[130px] truncate text-xs font-medium text-[var(--text)]">
                                 {loadingUser ? "Loading..." : user ? `${user.firstName} ${user.lastName}` : "Account"}
-                            </span>
-
-                            <span className="block max-w-[130px] truncate text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">
-                                Operator
                             </span>
                         </span>
 
