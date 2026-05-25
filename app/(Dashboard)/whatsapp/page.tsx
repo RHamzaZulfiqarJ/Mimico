@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useState, type ElementType } from "react";
 import { motion } from "framer-motion";
 import {
     Activity,
@@ -21,11 +21,11 @@ import {
     XCircle,
 } from "lucide-react";
 import {
-    whatsappClient,
     ApiClientError,
     buildTemplatePreview,
     extractTemplateVariables,
     normalizeTemplateName,
+    whatsappClient,
     type WhatsAppAccount,
     type WhatsAppContact,
     type WhatsAppMessageLog,
@@ -34,7 +34,7 @@ import {
     type WhatsAppTemplateCategory,
 } from "@/libs/whatsapp/client";
 
-type Tab = "overview" | "contacts" | "templates" | "scheduled" | "logs";
+type Tab = "send" | "contacts" | "templates" | "activity";
 
 type Notice = {
     type: "success" | "error";
@@ -71,12 +71,11 @@ const emptyTemplateForm = {
     footerText: "",
 };
 
-const tabs: { id: Tab; label: string; icon: typeof Activity }[] = [
-    { id: "overview", label: "Overview", icon: Activity },
+const tabs: { id: Tab; label: string; icon: ElementType }[] = [
+    { id: "send", label: "Send", icon: Send },
     { id: "contacts", label: "Contacts", icon: Users },
     { id: "templates", label: "Templates", icon: FileText },
-    { id: "scheduled", label: "Scheduled", icon: Clock },
-    { id: "logs", label: "Logs", icon: MessageCircle },
+    { id: "activity", label: "Activity", icon: Activity },
 ];
 
 const getErrorMessage = (error: unknown) => {
@@ -91,34 +90,20 @@ const getErrorMessage = (error: unknown) => {
     return "Something went wrong";
 };
 
-const getStatusClass = (status?: string | null) => {
-    const value = status?.toUpperCase();
-
-    if (value === "APPROVED" || value === "SENT") {
-        return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
-    }
-
-    if (value === "QUEUED" || value === "PROCESSING") {
-        return "bg-amber-500/10 text-amber-400 border-amber-500/20";
-    }
-
-    if (value === "FAILED" || value === "REJECTED") {
-        return "bg-red-500/10 text-red-400 border-red-500/20";
-    }
-
-    if (value === "CANCELLED") {
-        return "bg-gray-500/10 text-gray-400 border-gray-500/20";
-    }
-
-    return "bg-purple-500/10 text-purple-300 border-purple-500/20";
-};
-
 const formatDate = (value?: string | null) => {
     if (!value) {
         return "N/A";
     }
 
     return new Date(value).toLocaleString();
+};
+
+const getMinScheduleDateTime = () => {
+    const date = new Date(Date.now() + 60_000);
+    const offset = date.getTimezoneOffset();
+    const local = new Date(date.getTime() - offset * 60_000);
+
+    return local.toISOString().slice(0, 16);
 };
 
 const extractBodyTextFromComponents = (components: unknown) => {
@@ -157,8 +142,30 @@ const formatPayload = (value: unknown) => {
     }
 };
 
+const getStatusClass = (status?: string | null) => {
+    const value = status?.toUpperCase();
+
+    if (value === "APPROVED" || value === "SENT") {
+        return "border-[rgba(34,197,94,0.22)] bg-[rgba(34,197,94,0.08)] text-[var(--success)]";
+    }
+
+    if (value === "QUEUED" || value === "PROCESSING") {
+        return "border-[rgba(245,158,11,0.25)] bg-[rgba(245,158,11,0.08)] text-[var(--warning)]";
+    }
+
+    if (value === "FAILED" || value === "REJECTED") {
+        return "border-[rgba(239,68,68,0.25)] bg-[rgba(239,68,68,0.08)] text-red-300";
+    }
+
+    if (value === "CANCELLED") {
+        return "border-[var(--border)] bg-[var(--surface-3)] text-[var(--text-muted)]";
+    }
+
+    return "border-[rgba(94,106,210,0.28)] bg-[rgba(94,106,210,0.09)] text-[var(--accent)]";
+};
+
 export default function WhatsAppDashboardPage() {
-    const [activeTab, setActiveTab] = useState<Tab>("overview");
+    const [activeTab, setActiveTab] = useState<Tab>("send");
     const [accounts, setAccounts] = useState<WhatsAppAccount[]>([]);
     const [selectedAccountId, setSelectedAccountId] = useState("");
     const [contacts, setContacts] = useState<WhatsAppContact[]>([]);
@@ -224,7 +231,7 @@ export default function WhatsAppDashboardPage() {
             accounts: accounts.length,
             contacts: contacts.length,
             templates: templates.length,
-            scheduled: scheduledMessages.filter((message) => message.status === "QUEUED").length,
+            queued: scheduledMessages.filter((message) => message.status === "QUEUED").length,
             failed: scheduledMessages.filter((message) => message.status === "FAILED").length,
             logs: logs.length,
         };
@@ -232,6 +239,7 @@ export default function WhatsAppDashboardPage() {
 
     const showNotice = (type: Notice["type"], message: string) => {
         setNotice({ type, message });
+
         window.setTimeout(() => {
             setNotice(null);
         }, 3500);
@@ -253,7 +261,7 @@ export default function WhatsAppDashboardPage() {
     const loadAccountData = async (accountId: string) => {
         const [contactsData, templatesData, scheduledData, logsData] = await Promise.all([
             whatsappClient.listContacts(accountId, { limit: 20, q: searchContacts || undefined }),
-            whatsappClient.listTemplates(accountId, { limit: 20 }),
+            whatsappClient.listTemplates(accountId, { limit: 50 }),
             whatsappClient.listScheduledMessages(accountId, { limit: 20 }),
             whatsappClient.listLogs(accountId, { limit: 20, q: searchLogs || undefined }),
         ]);
@@ -300,6 +308,10 @@ export default function WhatsAppDashboardPage() {
 
     useEffect(() => {
         if (!selectedAccountId) {
+            setContacts([]);
+            setTemplates([]);
+            setScheduledMessages([]);
+            setLogs([]);
             return;
         }
 
@@ -331,7 +343,7 @@ export default function WhatsAppDashboardPage() {
             setConnectForm(emptyConnectForm);
             await loadAccounts();
             setSelectedAccountId(result.account.id);
-            showNotice("success", "WhatsApp account connected successfully");
+            showNotice("success", "WhatsApp account connected");
         } catch (error) {
             showNotice("error", getErrorMessage(error));
         } finally {
@@ -385,7 +397,7 @@ export default function WhatsAppDashboardPage() {
 
             setContactForm(emptyContactForm);
             await loadAccountData(selectedAccountId);
-            showNotice("success", "Contact added successfully");
+            showNotice("success", "Contact added");
         } catch (error) {
             showNotice("error", getErrorMessage(error));
         } finally {
@@ -497,6 +509,30 @@ export default function WhatsAppDashboardPage() {
         };
     };
 
+    const handleSendNowMessage = async () => {
+        try {
+            setActionLoading("sendNow");
+
+            const result = await whatsappClient.sendNowMessage({
+                ...getTemplateMessagePayload(),
+                scheduledAt: new Date().toISOString(),
+            });
+
+            if (!result.success) {
+                throw new Error(result.error || "Message could not be sent");
+            }
+
+            setScheduleForm(emptyScheduleForm);
+            setScheduleParamValues([]);
+            await loadAccountData(selectedAccountId);
+            showNotice("success", "Message sent");
+        } catch (error) {
+            showNotice("error", getErrorMessage(error));
+        } finally {
+            setActionLoading("");
+        }
+    };
+
     const handleScheduleMessage = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
 
@@ -507,42 +543,15 @@ export default function WhatsAppDashboardPage() {
 
             setActionLoading("schedule");
 
-            const payload = {
+            await whatsappClient.scheduleMessage({
                 ...getTemplateMessagePayload(),
                 scheduledAt: new Date(scheduleForm.scheduledAt).toISOString(),
-            };
-
-            await whatsappClient.scheduleMessage(payload);
-            setScheduleForm(emptyScheduleForm);
-            setScheduleParamValues([]);
-            await loadAccountData(selectedAccountId);
-            showNotice("success", "Message scheduled successfully");
-        } catch (error) {
-            showNotice("error", getErrorMessage(error));
-        } finally {
-            setActionLoading("");
-        }
-    };
-
-    const handleSendNowMessage = async () => {
-        try {
-            setActionLoading("sendNow");
-
-            const payload = {
-                ...getTemplateMessagePayload(),
-                scheduledAt: new Date().toISOString(),
-            };
-
-            const result = await whatsappClient.sendNowMessage(payload);
-
-            if (!result.success) {
-                throw new Error(result.error || "Message could not be sent");
-            }
+            });
 
             setScheduleForm(emptyScheduleForm);
             setScheduleParamValues([]);
             await loadAccountData(selectedAccountId);
-            showNotice("success", "Message sent successfully");
+            showNotice("success", "Message scheduled");
         } catch (error) {
             showNotice("error", getErrorMessage(error));
         } finally {
@@ -659,283 +668,384 @@ export default function WhatsAppDashboardPage() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center min-h-[60vh]">
-                <Loader2 className="w-8 h-8 animate-spin text-purple-400" />
+            <div className="flex min-h-[70vh] items-center justify-center">
+                <div className="linear-card flex items-center gap-3 px-4 py-3">
+                    <Loader2 className="h-4 w-4 animate-spin text-[var(--accent)]" strokeWidth={1.5} />
+                    <span className="text-sm font-medium text-[var(--text-soft)]">Loading WhatsApp workspace</span>
+                </div>
             </div>
         );
     }
 
     return (
         <motion.div
-            initial={{ opacity: 0, x: 16 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -16 }}
-            className="space-y-6"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+            className="space-y-5"
         >
-            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-                <div>
-                    <div className="flex items-center gap-3">
-                        <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                            <MessageCircle className="w-6 h-6 text-emerald-400" />
-                        </div>
-                        <div>
-                            <h1 className="text-3xl font-bold text-white">WhatsApp Business</h1>
-                            <p className="text-gray-400">
-                                Manage accounts, contacts, templates, scheduled messages, and logs.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-3">
-                    <select
-                        value={selectedAccountId}
-                        onChange={(event) => setSelectedAccountId(event.target.value)}
-                        className="bg-gray-950/70 border border-white/10 text-white rounded-xl px-4 py-3 outline-none focus:border-purple-500 min-w-[260px]"
-                    >
-                        <option value="">Select WhatsApp account</option>
-                        {accounts.map((account) => (
-                            <option key={account.id} value={account.id}>
-                                {account.businessName || account.accountUsername}{" "}
-                                {account.phoneNumberDisplay ? `(${account.phoneNumberDisplay})` : ""}
-                            </option>
-                        ))}
-                    </select>
-
-                    <button
-                        onClick={refreshSelectedAccountData}
-                        disabled={!selectedAccountId || actionLoading === "refresh"}
-                        className="flex items-center justify-center gap-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-3 text-sm font-semibold text-white transition-all"
-                    >
-                        {actionLoading === "refresh" ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                            <RefreshCw className="w-4 h-4" />
-                        )}
-                        Refresh
-                    </button>
-
-                    <button
-                        onClick={handleDisconnectAccount}
-                        disabled={!selectedAccountId || actionLoading === "disconnect"}
-                        className="flex items-center justify-center gap-2 rounded-xl bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-3 text-sm font-semibold text-red-300 transition-all"
-                    >
-                        {actionLoading === "disconnect" ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                            <Power className="w-4 h-4" />
-                        )}
-                        Disconnect
-                    </button>
-                </div>
-            </div>
-
-            {notice && (
-                <div
-                    className={`rounded-2xl border px-4 py-3 flex items-center gap-3 ${
-                        notice.type === "success"
-                            ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
-                            : "bg-red-500/10 border-red-500/20 text-red-300"
-                    }`}
-                >
-                    {notice.type === "success" ? <CheckCircle2 className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
-                    <span className="text-sm font-medium">{notice.message}</span>
-                </div>
-            )}
-
-            {accounts.length === 0 && (
-                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 flex items-start gap-3">
-                    <AlertTriangle className="w-5 h-5 text-amber-300 mt-0.5" />
-                    <div>
-                        <h3 className="font-bold text-amber-200">No WhatsApp account connected</h3>
-                        <p className="text-sm text-amber-100/80">
-                            Connect your WhatsApp Business phone number first. Your current Twitter, Mastodon, and
-                            Google OAuth functionality will remain untouched.
-                        </p>
-                    </div>
-                </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4">
-                <StatCard title="Accounts" value={stats.accounts} icon={Phone} />
-                <StatCard title="Contacts" value={stats.contacts} icon={Users} />
-                <StatCard title="Templates" value={stats.templates} icon={FileText} />
-                <StatCard title="Queued" value={stats.scheduled} icon={Clock} />
-                <StatCard title="Failed" value={stats.failed} icon={AlertTriangle} />
-                <StatCard title="Logs" value={stats.logs} icon={Activity} />
-            </div>
-
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                <div className="xl:col-span-1 glass rounded-2xl border border-white/5 p-6">
-                    <h2 className="text-xl font-bold text-white mb-1">Connect WhatsApp Number</h2>
-                    <p className="text-sm text-gray-400 mb-5">Use your Meta WhatsApp Business details.</p>
-
-                    <form onSubmit={handleConnectAccount} className="space-y-4">
-                        <Input
-                            label="Business Name"
-                            value={connectForm.businessName}
-                            onChange={(value) => setConnectForm((current) => ({ ...current, businessName: value }))}
-                            placeholder="Hamza Business"
-                            required
-                        />
-
-                        <Input
-                            label="WABA ID"
-                            value={connectForm.businessAccountId}
-                            onChange={(value) =>
-                                setConnectForm((current) => ({ ...current, businessAccountId: value }))
-                            }
-                            placeholder="4383963308557925"
-                            required
-                        />
-
-                        <Input
-                            label="Phone Number ID"
-                            value={connectForm.phoneNumberId}
-                            onChange={(value) => setConnectForm((current) => ({ ...current, phoneNumberId: value }))}
-                            placeholder="1108178919047639"
-                            required
-                        />
-
-                        <Input
-                            label="Display Number"
-                            value={connectForm.phoneNumberDisplay}
-                            onChange={(value) =>
-                                setConnectForm((current) => ({ ...current, phoneNumberDisplay: value }))
-                            }
-                            placeholder="+1 555-656-8440"
-                            required
-                        />
-
-                        <Textarea
-                            label="Access Token"
-                            value={connectForm.accessToken}
-                            onChange={(value) => setConnectForm((current) => ({ ...current, accessToken: value }))}
-                            placeholder="Paste Meta access token"
-                            rows={4}
-                            required
-                        />
-
-                        <button
-                            type="submit"
-                            disabled={actionLoading === "connect"}
-                            className="w-full flex items-center justify-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-60 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-purple-600/20 transition-all"
-                        >
-                            {actionLoading === "connect" ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                                <Plus className="w-4 h-4" />
-                            )}
-                            Connect Account
-                        </button>
-                    </form>
-                </div>
-
-                <div className="xl:col-span-2 glass rounded-2xl border border-white/5 overflow-hidden">
-                    <div className="p-6 border-b border-white/5 flex items-center justify-between gap-3">
-                        <div>
-                            <h2 className="text-xl font-bold text-white">Connected Numbers</h2>
-                            <p className="text-sm text-gray-400">Numbers connected to this user account.</p>
-                        </div>
-                    </div>
-
-                    <div className="divide-y divide-white/5">
-                        {accounts.length === 0 ? (
-                            <EmptyState
-                                title="No connected WhatsApp numbers"
-                                text="Connect your first WhatsApp Business number using the form."
-                            />
-                        ) : (
-                            accounts.map((account) => (
-                                <button
-                                    key={account.id}
-                                    onClick={() => setSelectedAccountId(account.id)}
-                                    className={`w-full text-left p-5 hover:bg-white/5 transition-all ${
-                                        selectedAccountId === account.id ? "bg-purple-500/10" : ""
-                                    }`}
-                                >
-                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                                                <Phone className="w-5 h-5 text-emerald-400" />
-                                            </div>
-
-                                            <div>
-                                                <h3 className="font-bold text-white">
-                                                    {account.businessName || account.accountUsername}
-                                                </h3>
-                                                <p className="text-sm text-gray-400">
-                                                    {account.phoneNumberDisplay || account.phoneNumberId}
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        <div className="text-left md:text-right">
-                                            <p className="text-xs text-gray-500">Phone Number ID</p>
-                                            <p className="text-sm text-gray-300">{account.phoneNumberId}</p>
-                                        </div>
-                                    </div>
-                                </button>
-                            ))
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            <div className="glass rounded-2xl border border-white/5 overflow-hidden">
-                <div className="border-b border-white/5 overflow-x-auto">
-                    <div className="flex min-w-max">
-                        {tabs.map((tab) => {
-                            const Icon = tab.icon;
-                            const active = activeTab === tab.id;
-
-                            return (
-                                <button
-                                    key={tab.id}
-                                    onClick={() => setActiveTab(tab.id)}
-                                    className={`flex items-center gap-2 px-5 py-4 text-sm font-semibold border-b-2 transition-all ${
-                                        active
-                                            ? "border-purple-500 text-white bg-purple-500/10"
-                                            : "border-transparent text-gray-400 hover:text-white hover:bg-white/5"
-                                    }`}
-                                >
-                                    <Icon className="w-4 h-4" />
-                                    {tab.label}
-                                </button>
-                            );
-                        })}
-                    </div>
-                </div>
-
-                {activeTab === "overview" && (
-                    <div className="p-6 space-y-6">
-                        {selectedAccount ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <InfoBox label="Business Name" value={selectedAccount.businessName || "N/A"} />
-                                <InfoBox label="Account Username" value={selectedAccount.accountUsername} />
-                                <InfoBox
-                                    label="Business Account ID"
-                                    value={selectedAccount.businessAccountId || "N/A"}
-                                />
-                                <InfoBox label="Phone Number ID" value={selectedAccount.phoneNumberId || "N/A"} />
-                                <InfoBox label="Display Number" value={selectedAccount.phoneNumberDisplay || "N/A"} />
-                                <InfoBox label="Connected At" value={formatDate(selectedAccount.createdAt)} />
+            <div className="linear-panel overflow-hidden">
+                <div className="border-b border-[var(--border)] px-5 py-4">
+                    <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
+                        <div className="flex min-w-0 items-center gap-4">
+                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-[rgba(34,197,94,0.22)] bg-[rgba(34,197,94,0.08)] text-[var(--success)]">
+                                <MessageCircle className="h-6 w-6" strokeWidth={1.5} />
                             </div>
+
+                            <div className="min-w-0">
+                                <div className="mb-2 flex items-center gap-2">
+                                    <span className="linear-badge border-[rgba(34,197,94,0.22)] bg-[rgba(34,197,94,0.08)] text-[var(--success)]">
+                                        WhatsApp Business
+                                    </span>
+                                    <span className="hidden text-xs text-[var(--text-muted)] sm:block">
+                                        Templates, contacts, sending, and logs
+                                    </span>
+                                </div>
+
+                                <h1 className="linear-title text-2xl md:text-3xl">WhatsApp</h1>
+
+                                <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-soft)]">
+                                    A simplified workspace for connecting a number, sending approved templates, and
+                                    tracking activity.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                            <select
+                                value={selectedAccountId}
+                                onChange={(event) => setSelectedAccountId(event.target.value)}
+                                className="linear-input h-9 min-w-[260px]"
+                            >
+                                <option value="">Select WhatsApp account</option>
+                                {accounts.map((account) => (
+                                    <option key={account.id} value={account.id}>
+                                        {account.businessName || account.accountUsername}{" "}
+                                        {account.phoneNumberDisplay ? `(${account.phoneNumberDisplay})` : ""}
+                                    </option>
+                                ))}
+                            </select>
+
+                            <button
+                                type="button"
+                                onClick={refreshSelectedAccountData}
+                                disabled={!selectedAccountId || actionLoading === "refresh"}
+                                className="linear-button-secondary h-9"
+                            >
+                                {actionLoading === "refresh" ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
+                                ) : (
+                                    <RefreshCw className="h-4 w-4" strokeWidth={1.5} />
+                                )}
+                                Refresh
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={handleDisconnectAccount}
+                                disabled={!selectedAccountId || actionLoading === "disconnect"}
+                                className="linear-button-danger h-9"
+                            >
+                                {actionLoading === "disconnect" ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
+                                ) : (
+                                    <Power className="h-4 w-4" strokeWidth={1.5} />
+                                )}
+                                Disconnect
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="grid border-b border-[var(--border)] md:grid-cols-6">
+                    <HeaderMetric label="Accounts" value={stats.accounts} />
+                    <HeaderMetric label="Contacts" value={stats.contacts} />
+                    <HeaderMetric label="Templates" value={stats.templates} />
+                    <HeaderMetric label="Queued" value={stats.queued} />
+                    <HeaderMetric label="Failed" value={stats.failed} />
+                    <HeaderMetric label="Logs" value={stats.logs} />
+                </div>
+
+                {notice && (
+                    <div
+                        className={`mx-5 my-4 flex items-center gap-3 rounded-md border px-3 py-2 text-sm font-medium ${
+                            notice.type === "success"
+                                ? "border-[rgba(34,197,94,0.24)] bg-[rgba(34,197,94,0.08)] text-[var(--success)]"
+                                : "border-[rgba(239,68,68,0.28)] bg-[rgba(239,68,68,0.08)] text-red-300"
+                        }`}
+                    >
+                        {notice.type === "success" ? (
+                            <CheckCircle2 className="h-4 w-4" strokeWidth={1.5} />
                         ) : (
-                            <EmptyState
-                                title="Select an account"
-                                text="Choose a connected WhatsApp number to view its details."
-                            />
+                            <XCircle className="h-4 w-4" strokeWidth={1.5} />
                         )}
+                        {notice.message}
                     </div>
                 )}
+            </div>
 
-                {activeTab === "contacts" && (
-                    <div className="p-6 grid grid-cols-1 xl:grid-cols-3 gap-6">
-                        <div className="xl:col-span-1 rounded-2xl bg-gray-950/40 border border-white/5 p-5">
-                            <h3 className="font-bold text-white mb-4">Add Contact</h3>
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[360px_1fr]">
+                <div className="space-y-4">
+                    <div className="linear-card overflow-hidden">
+                        <SectionHeader title="Current Account" text="Selected WhatsApp Business number." />
 
-                            <form onSubmit={handleCreateContact} className="space-y-4">
+                        {selectedAccount ? (
+                            <div className="space-y-3 p-4">
+                                <InfoLine label="Business" value={selectedAccount.businessName || "N/A"} />
+                                <InfoLine label="Username" value={selectedAccount.accountUsername} />
+                                <InfoLine label="WABA ID" value={selectedAccount.businessAccountId || "N/A"} />
+                                <InfoLine label="Phone ID" value={selectedAccount.phoneNumberId || "N/A"} />
+                                <InfoLine label="Display" value={selectedAccount.phoneNumberDisplay || "N/A"} />
+                            </div>
+                        ) : (
+                            <EmptyState title="No account selected" text="Connect or select a WhatsApp account." />
+                        )}
+                    </div>
+
+                    <div className="linear-card overflow-hidden">
+                        <SectionHeader title="Connect Number" text="Use Meta WhatsApp Business details." />
+
+                        <form onSubmit={handleConnectAccount} className="space-y-3 p-4">
+                            <Input
+                                label="Business Name"
+                                value={connectForm.businessName}
+                                onChange={(value) => setConnectForm((current) => ({ ...current, businessName: value }))}
+                                placeholder="Hamza Business"
+                                required
+                            />
+
+                            <Input
+                                label="WABA ID"
+                                value={connectForm.businessAccountId}
+                                onChange={(value) =>
+                                    setConnectForm((current) => ({ ...current, businessAccountId: value }))
+                                }
+                                placeholder="4383963308557925"
+                                required
+                            />
+
+                            <Input
+                                label="Phone Number ID"
+                                value={connectForm.phoneNumberId}
+                                onChange={(value) =>
+                                    setConnectForm((current) => ({ ...current, phoneNumberId: value }))
+                                }
+                                placeholder="1108178919047639"
+                                required
+                            />
+
+                            <Input
+                                label="Display Number"
+                                value={connectForm.phoneNumberDisplay}
+                                onChange={(value) =>
+                                    setConnectForm((current) => ({ ...current, phoneNumberDisplay: value }))
+                                }
+                                placeholder="+92 300 1234567"
+                                required
+                            />
+
+                            <Textarea
+                                label="Access Token"
+                                value={connectForm.accessToken}
+                                onChange={(value) => setConnectForm((current) => ({ ...current, accessToken: value }))}
+                                placeholder="Paste Meta access token"
+                                rows={4}
+                                required
+                            />
+
+                            <button
+                                type="submit"
+                                disabled={actionLoading === "connect"}
+                                className="linear-button-primary h-9 w-full"
+                            >
+                                {actionLoading === "connect" ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
+                                ) : (
+                                    <Plus className="h-4 w-4" strokeWidth={1.5} />
+                                )}
+                                Connect Account
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <div className="linear-card overflow-hidden">
+                    <div className="border-b border-[var(--border)] bg-[var(--surface-hover)] p-2">
+                        <div className="flex flex-wrap gap-1">
+                            {tabs.map((tab) => {
+                                const Icon = tab.icon;
+                                const active = activeTab === tab.id;
+
+                                return (
+                                    <button
+                                        key={tab.id}
+                                        type="button"
+                                        onClick={() => setActiveTab(tab.id)}
+                                        className={`linear-tab ${active ? "border-[var(--border)] bg-[var(--surface-3)] text-[var(--text)]" : ""}`}
+                                        data-active={active}
+                                    >
+                                        <Icon className="h-4 w-4" strokeWidth={1.5} />
+                                        {tab.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {activeTab === "send" && (
+                        <div className="grid grid-cols-1 gap-4 p-4 xl:grid-cols-2">
+                            <form
+                                onSubmit={handleScheduleMessage}
+                                className="space-y-4 rounded-lg border border-[var(--border)] bg-[var(--canvas)] p-4"
+                            >
+                                <div>
+                                    <h3 className="text-sm font-semibold text-[var(--text)]">Send Template Message</h3>
+                                    <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
+                                        Use an approved template. Send now or schedule for later.
+                                    </p>
+                                </div>
+
+                                <Select
+                                    label="Contact"
+                                    value={scheduleForm.contactId}
+                                    onChange={handleContactSelectForSchedule}
+                                >
+                                    <option value="">Manual phone number</option>
+                                    {contacts.map((contact) => (
+                                        <option key={contact.id} value={contact.id}>
+                                            {contact.name} ({contact.phoneNumber})
+                                        </option>
+                                    ))}
+                                </Select>
+
+                                <Input
+                                    label="Recipient Phone"
+                                    value={scheduleForm.recipientPhone}
+                                    onChange={(value) =>
+                                        setScheduleForm((current) => ({ ...current, recipientPhone: value }))
+                                    }
+                                    placeholder="923001234567"
+                                    required
+                                />
+
+                                <Select
+                                    label="Approved Template"
+                                    value={selectedScheduleTemplate?.id || ""}
+                                    onChange={handleTemplateSelectForSchedule}
+                                    required
+                                >
+                                    <option value="">Select template</option>
+                                    {approvedTemplates.map((template) => (
+                                        <option key={template.id} value={template.id}>
+                                            {template.name} ({template.language})
+                                        </option>
+                                    ))}
+                                </Select>
+
+                                {selectedTemplateVariables.length > 0 && (
+                                    <div className="space-y-3">
+                                        <p className="text-xs font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                                            Template Values
+                                        </p>
+
+                                        {selectedTemplateVariables.map((variable, index) => (
+                                            <Input
+                                                key={variable}
+                                                label={`Value {{${variable}}}`}
+                                                value={scheduleParamValues[index] || ""}
+                                                onChange={(value) => {
+                                                    setScheduleParamValues((current) => {
+                                                        const next = [...current];
+                                                        next[index] = value;
+                                                        return next;
+                                                    });
+                                                }}
+                                                placeholder={`Value for {{${variable}}}`}
+                                                required
+                                            />
+                                        ))}
+                                    </div>
+                                )}
+
+                                <Input
+                                    label="Schedule Time"
+                                    type="datetime-local"
+                                    value={scheduleForm.scheduledAt}
+                                    onChange={(value) =>
+                                        setScheduleForm((current) => ({ ...current, scheduledAt: value }))
+                                    }
+                                    min={getMinScheduleDateTime()}
+                                />
+
+                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                    <button
+                                        type="button"
+                                        onClick={handleSendNowMessage}
+                                        disabled={!selectedAccountId || actionLoading === "sendNow"}
+                                        className="linear-button-primary h-9"
+                                    >
+                                        {actionLoading === "sendNow" ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
+                                        ) : (
+                                            <Send className="h-4 w-4" strokeWidth={1.5} />
+                                        )}
+                                        Send Now
+                                    </button>
+
+                                    <button
+                                        type="submit"
+                                        disabled={!selectedAccountId || actionLoading === "schedule"}
+                                        className="linear-button-secondary h-9"
+                                    >
+                                        {actionLoading === "schedule" ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
+                                        ) : (
+                                            <Clock className="h-4 w-4" strokeWidth={1.5} />
+                                        )}
+                                        Schedule
+                                    </button>
+                                </div>
+                            </form>
+
+                            <div className="rounded-lg border border-[var(--border)] bg-[var(--canvas)] p-4">
+                                <h3 className="text-sm font-semibold text-[var(--text)]">Preview</h3>
+
+                                <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
+                                    The final body after replacing template variables.
+                                </p>
+
+                                <div className="mt-4 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+                                    <div className="mb-3 flex items-center gap-2">
+                                        <MessageCircle className="h-4 w-4 text-[var(--success)]" strokeWidth={1.5} />
+                                        <span className="text-xs font-medium text-[var(--text-muted)]">
+                                            WhatsApp message
+                                        </span>
+                                    </div>
+
+                                    <p className="whitespace-pre-wrap text-sm leading-6 text-[var(--text-soft)]">
+                                        {schedulePreview || "Select an approved template to preview the message."}
+                                    </p>
+                                </div>
+
+                                <div className="mt-4 rounded-lg border border-[rgba(245,158,11,0.25)] bg-[rgba(245,158,11,0.08)] p-3">
+                                    <p className="text-sm font-medium text-[var(--warning)]">Template rule</p>
+                                    <p className="mt-1 text-xs leading-5 text-[var(--text-soft)]">
+                                        WhatsApp Business requires approved templates for business-initiated messages.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === "contacts" && (
+                        <div className="grid grid-cols-1 gap-4 p-4 xl:grid-cols-[320px_1fr]">
+                            <form
+                                onSubmit={handleCreateContact}
+                                className="space-y-4 rounded-lg border border-[var(--border)] bg-[var(--canvas)] p-4"
+                            >
+                                <h3 className="text-sm font-semibold text-[var(--text)]">Add Contact</h3>
+
                                 <Input
                                     label="Name"
                                     value={contactForm.name}
@@ -957,103 +1067,107 @@ export default function WhatsAppDashboardPage() {
                                 <button
                                     type="submit"
                                     disabled={!selectedAccountId || actionLoading === "contact"}
-                                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-60 px-4 py-3 text-sm font-bold text-white transition-all"
+                                    className="linear-button-primary h-9 w-full"
                                 >
                                     {actionLoading === "contact" ? (
-                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
                                     ) : (
-                                        <Plus className="w-4 h-4" />
+                                        <Plus className="h-4 w-4" strokeWidth={1.5} />
                                     )}
                                     Add Contact
                                 </button>
                             </form>
-                        </div>
 
-                        <div className="xl:col-span-2 rounded-2xl bg-gray-950/40 border border-white/5 overflow-hidden">
-                            <div className="p-5 border-b border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                                <h3 className="font-bold text-white">Contacts</h3>
+                            <div className="rounded-lg border border-[var(--border)] bg-[var(--canvas)]">
+                                <div className="flex flex-col justify-between gap-3 border-b border-[var(--border)] p-4 md:flex-row md:items-center">
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-[var(--text)]">Contacts</h3>
+                                        <p className="mt-1 text-xs text-[var(--text-muted)]">
+                                            {contacts.length} saved contact(s)
+                                        </p>
+                                    </div>
 
-                                <form onSubmit={handleContactSearch} className="flex gap-2">
-                                    <input
-                                        value={searchContacts}
-                                        onChange={(event) => setSearchContacts(event.target.value)}
-                                        placeholder="Search contacts"
-                                        className="bg-gray-950/70 border border-white/10 text-white rounded-xl px-4 py-2 outline-none focus:border-purple-500"
-                                    />
-                                    <button
-                                        type="submit"
-                                        className="rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 px-3 py-2 text-white"
-                                    >
-                                        <Search className="w-4 h-4" />
-                                    </button>
-                                </form>
-                            </div>
+                                    <form onSubmit={handleContactSearch} className="flex gap-2">
+                                        <input
+                                            value={searchContacts}
+                                            onChange={(event) => setSearchContacts(event.target.value)}
+                                            placeholder="Search contacts"
+                                            className="linear-input h-9"
+                                        />
 
-                            <div className="divide-y divide-white/5">
-                                {contacts.length === 0 ? (
-                                    <EmptyState
-                                        title="No contacts found"
-                                        text="Add contacts manually or import them later."
-                                    />
-                                ) : (
-                                    contacts.map((contact) => (
-                                        <div
-                                            key={contact.id}
-                                            className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4"
-                                        >
-                                            <div>
-                                                <h4 className="font-bold text-white">{contact.name}</h4>
-                                                <p className="text-sm text-gray-400">{contact.phoneNumber}</p>
-                                                {contact.isBlocked && (
-                                                    <span className="inline-block mt-2 text-xs px-2 py-1 rounded-lg bg-red-500/10 text-red-300 border border-red-500/20">
-                                                        Blocked
-                                                    </span>
-                                                )}
-                                            </div>
+                                        <button type="submit" className="linear-button-secondary h-9 w-9 p-0">
+                                            <Search className="h-4 w-4" strokeWidth={1.5} />
+                                        </button>
+                                    </form>
+                                </div>
 
-                                            <button
-                                                onClick={() => handleDeleteContact(contact.id)}
-                                                disabled={actionLoading === contact.id}
-                                                className="flex items-center justify-center gap-2 rounded-xl bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 disabled:opacity-60 px-3 py-2 text-sm font-semibold text-red-300"
+                                <div className="divide-y divide-[var(--border)]">
+                                    {contacts.length === 0 ? (
+                                        <EmptyState
+                                            title="No contacts found"
+                                            text="Add contacts manually to reuse them while sending templates."
+                                        />
+                                    ) : (
+                                        contacts.map((contact) => (
+                                            <div
+                                                key={contact.id}
+                                                className="flex flex-col justify-between gap-3 p-4 transition-colors hover:bg-[var(--surface-hover)] sm:flex-row sm:items-center"
                                             >
-                                                {actionLoading === contact.id ? (
-                                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                                ) : (
-                                                    <Trash2 className="w-4 h-4" />
-                                                )}
-                                                Delete
-                                            </button>
-                                        </div>
-                                    ))
-                                )}
+                                                <div>
+                                                    <h4 className="text-sm font-semibold text-[var(--text)]">
+                                                        {contact.name}
+                                                    </h4>
+                                                    <p className="mt-1 text-sm text-[var(--text-muted)]">
+                                                        {contact.phoneNumber}
+                                                    </p>
+                                                    {contact.isBlocked && (
+                                                        <span className="linear-badge mt-2 border-[rgba(239,68,68,0.25)] bg-[rgba(239,68,68,0.08)] text-red-300">
+                                                            Blocked
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDeleteContact(contact.id)}
+                                                    disabled={actionLoading === contact.id}
+                                                    className="linear-button-danger h-8 px-3 text-xs"
+                                                >
+                                                    {actionLoading === contact.id ? (
+                                                        <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
+                                                    ) : (
+                                                        <Trash2 className="h-4 w-4" strokeWidth={1.5} />
+                                                    )}
+                                                    Delete
+                                                </button>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
+                    )}
 
-                {activeTab === "templates" && (
-                    <div className="p-6 grid grid-cols-1 xl:grid-cols-3 gap-6">
-                        <div className="xl:col-span-1 rounded-2xl bg-gray-950/40 border border-white/5 p-5">
-                            <h3 className="font-bold text-white mb-1">Create Template</h3>
-                            <p className="text-sm text-gray-400 mb-5">
-                                Create a simple text template and submit it to Meta for approval.
-                            </p>
+                    {activeTab === "templates" && (
+                        <div className="grid grid-cols-1 gap-4 p-4 xl:grid-cols-[360px_1fr]">
+                            <form
+                                onSubmit={handleCreateTemplate}
+                                className="space-y-4 rounded-lg border border-[var(--border)] bg-[var(--canvas)] p-4"
+                            >
+                                <div>
+                                    <h3 className="text-sm font-semibold text-[var(--text)]">Create Template</h3>
+                                    <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
+                                        Submit a simple template to Meta for approval.
+                                    </p>
+                                </div>
 
-                            <form onSubmit={handleCreateTemplate} className="space-y-4">
                                 <Input
                                     label="Template Name"
                                     value={templateForm.name}
                                     onChange={(value) => setTemplateForm((current) => ({ ...current, name: value }))}
-                                    placeholder="appointment reminder"
+                                    placeholder="order_update"
                                     required
                                 />
-
-                                <div className="rounded-xl bg-gray-950/70 border border-white/10 px-4 py-3">
-                                    <p className="text-xs text-gray-500 mb-1">Final Template Name</p>
-                                    <p className="text-sm font-semibold text-purple-300">
-                                        {normalizeTemplateName(templateForm.name) || "template_name"}
-                                    </p>
-                                </div>
 
                                 <Select
                                     label="Category"
@@ -1087,7 +1201,7 @@ export default function WhatsAppDashboardPage() {
                                     onChange={(value) =>
                                         setTemplateForm((current) => ({ ...current, headerText: value }))
                                     }
-                                    placeholder="Appointment Reminder"
+                                    placeholder="Optional header"
                                 />
 
                                 <Textarea
@@ -1096,19 +1210,30 @@ export default function WhatsAppDashboardPage() {
                                     onChange={(value) =>
                                         setTemplateForm((current) => ({ ...current, bodyText: value }))
                                     }
-                                    placeholder="Hello {{1}}, your appointment is confirmed for {{2}}."
+                                    placeholder="Hello {{1}}, your order {{2}} is ready."
                                     rows={5}
                                     required
                                 />
 
+                                <Input
+                                    label="Footer Text"
+                                    value={templateForm.footerText}
+                                    onChange={(value) =>
+                                        setTemplateForm((current) => ({ ...current, footerText: value }))
+                                    }
+                                    placeholder="Optional footer"
+                                />
+
                                 {createTemplateVariables.length > 0 && (
                                     <div className="space-y-3">
-                                        <p className="text-sm font-semibold text-gray-300">Example Values</p>
+                                        <p className="text-xs font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                                            Example Values
+                                        </p>
 
                                         {createTemplateVariables.map((variable, index) => (
                                             <Input
                                                 key={variable}
-                                                label={`Example for {{${variable}}}`}
+                                                label={`Example {{${variable}}}`}
                                                 value={templateExampleValues[index] || ""}
                                                 onChange={(value) => {
                                                     setTemplateExampleValues((current) => {
@@ -1117,26 +1242,19 @@ export default function WhatsAppDashboardPage() {
                                                         return next;
                                                     });
                                                 }}
-                                                placeholder={index === 0 ? "Hamza" : "Monday 5 PM"}
+                                                placeholder={`Example for {{${variable}}}`}
                                                 required
                                             />
                                         ))}
                                     </div>
                                 )}
 
-                                <Input
-                                    label="Footer Text"
-                                    value={templateForm.footerText}
-                                    onChange={(value) =>
-                                        setTemplateForm((current) => ({ ...current, footerText: value }))
-                                    }
-                                    placeholder="Thank you"
-                                />
-
                                 {templateForm.bodyText && (
-                                    <div className="rounded-2xl bg-emerald-500/10 border border-emerald-500/20 p-4">
-                                        <p className="text-xs font-semibold text-emerald-300 mb-2">Preview</p>
-                                        <p className="text-sm text-white whitespace-pre-wrap">
+                                    <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
+                                        <p className="mb-2 text-xs font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                                            Preview
+                                        </p>
+                                        <p className="whitespace-pre-wrap text-sm leading-6 text-[var(--text-soft)]">
                                             {createTemplatePreview}
                                         </p>
                                     </div>
@@ -1145,412 +1263,299 @@ export default function WhatsAppDashboardPage() {
                                 <button
                                     type="submit"
                                     disabled={!selectedAccountId || actionLoading === "createTemplate"}
-                                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-60 px-4 py-3 text-sm font-bold text-white transition-all"
+                                    className="linear-button-primary h-9 w-full"
                                 >
                                     {actionLoading === "createTemplate" ? (
-                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
                                     ) : (
-                                        <Plus className="w-4 h-4" />
+                                        <Plus className="h-4 w-4" strokeWidth={1.5} />
                                     )}
                                     Create Template
                                 </button>
                             </form>
-                        </div>
 
-                        <div className="xl:col-span-2 space-y-5">
-                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                                <div>
-                                    <h3 className="font-bold text-white">WhatsApp Templates</h3>
-                                    <p className="text-sm text-gray-400">
-                                        Sync after creating templates to get latest approval status.
-                                    </p>
+                            <div className="rounded-lg border border-[var(--border)] bg-[var(--canvas)]">
+                                <div className="flex flex-col justify-between gap-3 border-b border-[var(--border)] p-4 md:flex-row md:items-center">
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-[var(--text)]">Templates</h3>
+                                        <p className="mt-1 text-xs text-[var(--text-muted)]">
+                                            Sync from Meta after approval or rejection.
+                                        </p>
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        onClick={handleSyncTemplates}
+                                        disabled={!selectedAccountId || actionLoading === "syncTemplates"}
+                                        className="linear-button-secondary h-9"
+                                    >
+                                        {actionLoading === "syncTemplates" ? (
+                                            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
+                                        ) : (
+                                            <RefreshCw className="h-4 w-4" strokeWidth={1.5} />
+                                        )}
+                                        Sync
+                                    </button>
                                 </div>
 
-                                <button
-                                    onClick={handleSyncTemplates}
-                                    disabled={!selectedAccountId || actionLoading === "syncTemplates"}
-                                    className="flex items-center justify-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-60 px-4 py-3 text-sm font-bold text-white transition-all"
-                                >
-                                    {actionLoading === "syncTemplates" ? (
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                    ) : (
-                                        <RefreshCw className="w-4 h-4" />
-                                    )}
-                                    Sync Templates
-                                </button>
-                            </div>
-
-                            <div className="rounded-2xl bg-gray-950/40 border border-white/5 overflow-hidden">
-                                <div className="divide-y divide-white/5">
+                                <div className="divide-y divide-[var(--border)]">
                                     {templates.length === 0 ? (
                                         <EmptyState
                                             title="No templates found"
-                                            text="Create a template or sync existing templates from Meta."
+                                            text="Create or sync templates from Meta."
                                         />
                                     ) : (
-                                        templates.map((template) => {
-                                            const bodyText = extractBodyTextFromComponents(template.components);
+                                        templates.map((template) => (
+                                            <div
+                                                key={template.id}
+                                                className="p-4 transition-colors hover:bg-[var(--surface-hover)]"
+                                            >
+                                                <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+                                                    <div className="min-w-0">
+                                                        <h4 className="truncate text-sm font-semibold text-[var(--text)]">
+                                                            {template.name}
+                                                        </h4>
+                                                        <p className="mt-1 text-xs text-[var(--text-muted)]">
+                                                            {template.language}{" "}
+                                                            {template.category ? `• ${template.category}` : ""}
+                                                        </p>
+                                                    </div>
 
-                                            return (
-                                                <div key={template.id} className="p-5 space-y-3">
-                                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                                    <span
+                                                        className={`linear-badge uppercase ${getStatusClass(template.status)}`}
+                                                    >
+                                                        {template.status || "UNKNOWN"}
+                                                    </span>
+                                                </div>
+
+                                                <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[var(--text-soft)]">
+                                                    {extractBodyTextFromComponents(template.components) ||
+                                                        "No body text available"}
+                                                </p>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === "activity" && (
+                        <div className="grid grid-cols-1 gap-4 p-4 xl:grid-cols-2">
+                            <div className="rounded-lg border border-[var(--border)] bg-[var(--canvas)]">
+                                <SectionHeader
+                                    title="Scheduled Messages"
+                                    text="Queued, sent, cancelled, and failed template messages."
+                                />
+
+                                <div className="divide-y divide-[var(--border)]">
+                                    {scheduledMessages.length === 0 ? (
+                                        <EmptyState
+                                            title="No scheduled messages"
+                                            text="Send or schedule a template message to see it here."
+                                        />
+                                    ) : (
+                                        scheduledMessages.map((message) => (
+                                            <div
+                                                key={message.id}
+                                                className="space-y-3 p-4 transition-colors hover:bg-[var(--surface-hover)]"
+                                            >
+                                                <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+                                                    <div>
+                                                        <h4 className="text-sm font-semibold text-[var(--text)]">
+                                                            {message.templateName || "Template message"}
+                                                        </h4>
+                                                        <p className="mt-1 text-sm text-[var(--text-muted)]">
+                                                            To {message.recipientPhone}
+                                                        </p>
+                                                        <p className="mt-1 text-xs text-[var(--text-muted)]">
+                                                            Scheduled {formatDate(message.scheduledAt)}
+                                                        </p>
+                                                        {message.sentAt && (
+                                                            <p className="mt-1 text-xs text-[var(--text-muted)]">
+                                                                Sent {formatDate(message.sentAt)}
+                                                            </p>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <span
+                                                            className={`linear-badge uppercase ${getStatusClass(message.status)}`}
+                                                        >
+                                                            {message.status}
+                                                        </span>
+
+                                                        {(message.status === "QUEUED" ||
+                                                            message.status === "FAILED" ||
+                                                            message.status === "DRAFT") && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleCancelMessage(message.id)}
+                                                                disabled={actionLoading === message.id}
+                                                                className="linear-button-danger h-8 px-3 text-xs"
+                                                            >
+                                                                Cancel
+                                                            </button>
+                                                        )}
+
+                                                        {message.status === "FAILED" && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleRetryMessage(message.id)}
+                                                                disabled={actionLoading === message.id}
+                                                                className="linear-button-secondary h-8 px-3 text-xs"
+                                                            >
+                                                                Retry
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {message.errorMessage && (
+                                                    <div className="rounded-md border border-[rgba(239,68,68,0.25)] bg-[rgba(239,68,68,0.08)] p-3 text-sm leading-6 text-red-200">
+                                                        {message.errorMessage}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="rounded-lg border border-[var(--border)] bg-[var(--canvas)]">
+                                <div className="flex flex-col justify-between gap-3 border-b border-[var(--border)] bg-[var(--surface-hover)] p-4 md:flex-row md:items-center">
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-[var(--text)]">Message Logs</h3>
+                                        <p className="mt-1 text-xs text-[var(--text-muted)]">
+                                            API responses, errors, and webhook logs.
+                                        </p>
+                                    </div>
+
+                                    <form onSubmit={handleLogSearch} className="flex gap-2">
+                                        <input
+                                            value={searchLogs}
+                                            onChange={(event) => setSearchLogs(event.target.value)}
+                                            placeholder="Search logs"
+                                            className="linear-input h-9"
+                                        />
+
+                                        <button type="submit" className="linear-button-secondary h-9 w-9 p-0">
+                                            <Search className="h-4 w-4" strokeWidth={1.5} />
+                                        </button>
+                                    </form>
+                                </div>
+
+                                <div className="divide-y divide-[var(--border)]">
+                                    {logs.length === 0 ? (
+                                        <EmptyState
+                                            title="No logs found"
+                                            text="Logs appear after sends, webhook updates, or failures."
+                                        />
+                                    ) : (
+                                        logs.map((log) => (
+                                            <details key={log.id} className="group">
+                                                <summary className="list-none p-4 transition-colors hover:bg-[var(--surface-hover)]">
+                                                    <div className="flex cursor-pointer flex-col justify-between gap-3 sm:flex-row sm:items-start">
                                                         <div>
-                                                            <h4 className="font-bold text-white">{template.name}</h4>
-                                                            <p className="text-sm text-gray-400">
-                                                                {template.language}{" "}
-                                                                {template.category ? `• ${template.category}` : ""}
+                                                            <div className="flex items-center gap-2">
+                                                                <h4 className="text-sm font-semibold text-[var(--text)]">
+                                                                    {log.direction}
+                                                                </h4>
+                                                                {log.success ? (
+                                                                    <CheckCircle2
+                                                                        className="h-4 w-4 text-[var(--success)]"
+                                                                        strokeWidth={1.5}
+                                                                    />
+                                                                ) : (
+                                                                    <XCircle
+                                                                        className="h-4 w-4 text-red-300"
+                                                                        strokeWidth={1.5}
+                                                                    />
+                                                                )}
+                                                            </div>
+
+                                                            <p className="mt-1 text-sm text-[var(--text-muted)]">
+                                                                {log.recipientPhone || "No recipient"}
+                                                            </p>
+
+                                                            <p className="mt-1 text-xs text-[var(--text-muted)]">
+                                                                {formatDate(log.createdAt)}
                                                             </p>
                                                         </div>
 
                                                         <span
-                                                            className={`text-xs px-3 py-1 rounded-lg border font-bold ${getStatusClass(template.status)}`}
+                                                            className={`linear-badge uppercase ${log.success ? "border-[rgba(34,197,94,0.22)] bg-[rgba(34,197,94,0.08)] text-[var(--success)]" : "border-[rgba(239,68,68,0.25)] bg-[rgba(239,68,68,0.08)] text-red-300"}`}
                                                         >
-                                                            {template.status || "UNKNOWN"}
+                                                            {log.success ? "Success" : "Failed"}
                                                         </span>
                                                     </div>
+                                                </summary>
 
-                                                    {bodyText && (
-                                                        <div className="rounded-xl bg-black/30 border border-white/5 p-3">
-                                                            <p className="text-xs text-gray-500 mb-1">Body</p>
-                                                            <p className="text-sm text-gray-300 whitespace-pre-wrap">
-                                                                {bodyText}
-                                                            </p>
+                                                <div className="px-4 pb-4">
+                                                    {log.errorMessage && (
+                                                        <div className="mb-3 rounded-md border border-[rgba(239,68,68,0.25)] bg-[rgba(239,68,68,0.08)] p-3 text-sm text-red-200">
+                                                            {log.errorMessage}
                                                         </div>
                                                     )}
+
+                                                    <pre className="custom-scrollbar max-h-72 overflow-auto rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3 text-xs leading-5 text-[var(--text-soft)]">
+                                                        {formatPayload({
+                                                            payload: log.payload,
+                                                            response: log.response,
+                                                            scheduledMessage: log.scheduledMessage,
+                                                        })}
+                                                    </pre>
                                                 </div>
-                                            );
-                                        })
+                                            </details>
+                                        ))
                                     )}
                                 </div>
                             </div>
                         </div>
-                    </div>
-                )}
-
-                {activeTab === "scheduled" && (
-                    <div className="p-6 grid grid-cols-1 xl:grid-cols-3 gap-6">
-                        <div className="xl:col-span-1 rounded-2xl bg-gray-950/40 border border-white/5 p-5">
-                            <h3 className="font-bold text-white mb-4">Schedule Template Message</h3>
-
-                            <form onSubmit={handleScheduleMessage} className="space-y-4">
-                                <Select
-                                    label="Contact"
-                                    value={scheduleForm.contactId}
-                                    onChange={handleContactSelectForSchedule}
-                                >
-                                    <option value="">Manual number</option>
-                                    {contacts.map((contact) => (
-                                        <option key={contact.id} value={contact.id}>
-                                            {contact.name} - {contact.phoneNumber}
-                                        </option>
-                                    ))}
-                                </Select>
-
-                                <Input
-                                    label="Recipient Phone"
-                                    value={scheduleForm.recipientPhone}
-                                    onChange={(value) =>
-                                        setScheduleForm((current) => ({ ...current, recipientPhone: value }))
-                                    }
-                                    placeholder="923001234567"
-                                    required
-                                />
-
-                                <Select
-                                    label="Template"
-                                    value={selectedScheduleTemplate?.id || ""}
-                                    onChange={handleTemplateSelectForSchedule}
-                                    required
-                                >
-                                    <option value="">Select template</option>
-                                    {approvedTemplates.map((template) => (
-                                        <option key={template.id} value={template.id}>
-                                            {template.name} - {template.language}
-                                        </option>
-                                    ))}
-                                </Select>
-
-                                <Input
-                                    label="Language"
-                                    value={scheduleForm.templateLanguage}
-                                    onChange={(value) =>
-                                        setScheduleForm((current) => ({ ...current, templateLanguage: value }))
-                                    }
-                                    placeholder="en_US"
-                                    required
-                                />
-
-                                {selectedTemplateVariables.length > 0 && (
-                                    <div className="space-y-3">
-                                        <p className="text-sm font-semibold text-gray-300">Template Values</p>
-
-                                        {selectedTemplateVariables.map((variable, index) => (
-                                            <Input
-                                                key={variable}
-                                                label={`Value for {{${variable}}}`}
-                                                value={scheduleParamValues[index] || ""}
-                                                onChange={(value) => {
-                                                    setScheduleParamValues((current) => {
-                                                        const next = [...current];
-                                                        next[index] = value;
-                                                        return next;
-                                                    });
-                                                }}
-                                                placeholder={index === 0 ? "Hamza" : "Monday 5 PM"}
-                                                required
-                                            />
-                                        ))}
-                                    </div>
-                                )}
-
-                                {schedulePreview && (
-                                    <div className="rounded-2xl bg-emerald-500/10 border border-emerald-500/20 p-4">
-                                        <p className="text-xs font-semibold text-emerald-300 mb-2">Message Preview</p>
-                                        <p className="text-sm text-white whitespace-pre-wrap">{schedulePreview}</p>
-                                    </div>
-                                )}
-
-                                <Input
-                                    label="Schedule Time"
-                                    type="datetime-local"
-                                    value={scheduleForm.scheduledAt}
-                                    onChange={(value) =>
-                                        setScheduleForm((current) => ({ ...current, scheduledAt: value }))
-                                    }
-                                    required
-                                />
-
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={handleSendNowMessage}
-                                        disabled={!selectedAccountId || actionLoading === "sendNow"}
-                                        className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 px-4 py-3 text-sm font-bold text-white transition-all"
-                                    >
-                                        {actionLoading === "sendNow" ? (
-                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                        ) : (
-                                            <Send className="w-4 h-4" />
-                                        )}
-                                        Send Now
-                                    </button>
-
-                                    <button
-                                        type="submit"
-                                        disabled={!selectedAccountId || actionLoading === "schedule"}
-                                        className="w-full flex items-center justify-center gap-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-60 px-4 py-3 text-sm font-bold text-white transition-all"
-                                    >
-                                        {actionLoading === "schedule" ? (
-                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                        ) : (
-                                            <Clock className="w-4 h-4" />
-                                        )}
-                                        Schedule
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-
-                        <div className="xl:col-span-2 rounded-2xl bg-gray-950/40 border border-white/5 overflow-hidden">
-                            <div className="p-5 border-b border-white/5">
-                                <h3 className="font-bold text-white">Scheduled Messages</h3>
-                            </div>
-
-                            <div className="divide-y divide-white/5">
-                                {scheduledMessages.length === 0 ? (
-                                    <EmptyState
-                                        title="No scheduled messages"
-                                        text="Schedule a template message to see it here."
-                                    />
-                                ) : (
-                                    scheduledMessages.map((message) => (
-                                        <div key={message.id} className="p-5 space-y-4">
-                                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                                <div>
-                                                    <h4 className="font-bold text-white">
-                                                        {message.templateName || "Template Message"}
-                                                    </h4>
-                                                    <p className="text-sm text-gray-400">
-                                                        To {message.contact?.name ? `${message.contact.name} • ` : ""}
-                                                        {message.recipientPhone}
-                                                    </p>
-                                                    <p className="text-xs text-gray-500 mt-1">
-                                                        Scheduled: {formatDate(message.scheduledAt)}
-                                                    </p>
-                                                </div>
-
-                                                <div className="flex flex-wrap items-center gap-2">
-                                                    <span
-                                                        className={`text-xs px-3 py-1 rounded-lg border font-bold ${getStatusClass(message.status)}`}
-                                                    >
-                                                        {message.status}
-                                                    </span>
-
-                                                    {(message.status === "QUEUED" ||
-                                                        message.status === "FAILED" ||
-                                                        message.status === "DRAFT") && (
-                                                        <button
-                                                            onClick={() => handleCancelMessage(message.id)}
-                                                            disabled={actionLoading === message.id}
-                                                            className="rounded-xl bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 disabled:opacity-60 px-3 py-2 text-xs font-bold text-red-300"
-                                                        >
-                                                            Cancel
-                                                        </button>
-                                                    )}
-
-                                                    {message.status === "FAILED" && (
-                                                        <button
-                                                            onClick={() => handleRetryMessage(message.id)}
-                                                            disabled={actionLoading === message.id}
-                                                            className="rounded-xl bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/20 disabled:opacity-60 px-3 py-2 text-xs font-bold text-purple-300"
-                                                        >
-                                                            Retry
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {message.errorMessage && (
-                                                <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-200">
-                                                    {message.errorMessage}
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {activeTab === "logs" && (
-                    <div className="p-6 space-y-5">
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                            <div>
-                                <h3 className="font-bold text-white">Message Logs</h3>
-                                <p className="text-sm text-gray-400">
-                                    Inbound messages, outbound sends, statuses, and errors.
-                                </p>
-                            </div>
-
-                            <form onSubmit={handleLogSearch} className="flex gap-2">
-                                <input
-                                    value={searchLogs}
-                                    onChange={(event) => setSearchLogs(event.target.value)}
-                                    placeholder="Search logs"
-                                    className="bg-gray-950/70 border border-white/10 text-white rounded-xl px-4 py-2 outline-none focus:border-purple-500"
-                                />
-                                <button
-                                    type="submit"
-                                    className="rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 px-3 py-2 text-white"
-                                >
-                                    <Search className="w-4 h-4" />
-                                </button>
-                            </form>
-                        </div>
-
-                        <div className="rounded-2xl bg-gray-950/40 border border-white/5 overflow-hidden">
-                            <div className="divide-y divide-white/5">
-                                {logs.length === 0 ? (
-                                    <EmptyState
-                                        title="No logs found"
-                                        text="Send messages or receive webhooks to see logs here."
-                                    />
-                                ) : (
-                                    logs.map((log) => (
-                                        <details key={log.id} className="group">
-                                            <summary className="list-none cursor-pointer p-5 hover:bg-white/5 transition-all">
-                                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                                    <div>
-                                                        <div className="flex items-center gap-2">
-                                                            <h4 className="font-bold text-white">{log.direction}</h4>
-                                                            {log.success ? (
-                                                                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                                                            ) : (
-                                                                <XCircle className="w-4 h-4 text-red-400" />
-                                                            )}
-                                                        </div>
-                                                        <p className="text-sm text-gray-400">
-                                                            {log.recipientPhone || "No recipient"}{" "}
-                                                            {log.metaMessageId ? `• ${log.metaMessageId}` : ""}
-                                                        </p>
-                                                        <p className="text-xs text-gray-500 mt-1">
-                                                            {formatDate(log.createdAt)}
-                                                        </p>
-                                                    </div>
-
-                                                    <span
-                                                        className={`text-xs px-3 py-1 rounded-lg border font-bold ${
-                                                            log.success
-                                                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                                                                : "bg-red-500/10 text-red-400 border-red-500/20"
-                                                        }`}
-                                                    >
-                                                        {log.success ? "SUCCESS" : "FAILED"}
-                                                    </span>
-                                                </div>
-                                            </summary>
-
-                                            <div className="px-5 pb-5 space-y-3">
-                                                {log.errorMessage && (
-                                                    <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-200">
-                                                        {log.errorMessage}
-                                                    </div>
-                                                )}
-
-                                                <pre className="max-h-80 overflow-auto rounded-xl bg-black/40 border border-white/10 p-4 text-xs text-gray-300 custom-scrollbar">
-                                                    {formatPayload({
-                                                        payload: log.payload,
-                                                        response: log.response,
-                                                        scheduledMessage: log.scheduledMessage,
-                                                    })}
-                                                </pre>
-                                            </div>
-                                        </details>
-                                    ))
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
         </motion.div>
     );
 }
 
-function StatCard({ title, value, icon: Icon }: { title: string; value: number; icon: typeof Activity }) {
+function HeaderMetric({ label, value }: { label: string; value: number }) {
     return (
-        <div className="glass rounded-2xl border border-white/5 p-5">
-            <div className="flex items-center justify-between">
-                <div>
-                    <p className="text-sm text-gray-400">{title}</p>
-                    <h3 className="text-2xl font-bold text-white mt-1">{value}</h3>
-                </div>
-                <div className="w-11 h-11 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
-                    <Icon className="w-5 h-5 text-purple-300" />
-                </div>
-            </div>
+        <div className="border-r border-[var(--border)] px-5 py-4 last:border-r-0">
+            <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">{label}</p>
+            <p className="mt-1 text-2xl font-semibold tracking-[-0.04em] text-[var(--text)]">{value}</p>
         </div>
     );
 }
 
-function InfoBox({ label, value }: { label: string; value: string }) {
+function SectionHeader({ title, text }: { title: string; text: string }) {
     return (
-        <div className="rounded-2xl bg-gray-950/40 border border-white/5 p-5">
-            <p className="text-sm text-gray-500">{label}</p>
-            <p className="font-semibold text-white mt-1 break-all">{value}</p>
+        <div className="border-b border-[var(--border)] bg-[var(--surface-hover)] px-4 py-3">
+            <h2 className="text-sm font-semibold text-[var(--text)]">{title}</h2>
+            <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">{text}</p>
+        </div>
+    );
+}
+
+function InfoLine({ label, value }: { label: string; value: string }) {
+    return (
+        <div className="rounded-md border border-[var(--border)] bg-[var(--canvas)] p-3">
+            <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">{label}</p>
+            <p className="mt-1 break-all text-sm font-medium text-[var(--text)]">{value}</p>
         </div>
     );
 }
 
 function EmptyState({ title, text }: { title: string; text: string }) {
     return (
-        <div className="p-8 text-center">
-            <div className="w-12 h-12 mx-auto rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-3">
-                <MessageCircle className="w-5 h-5 text-gray-500" />
+        <div className="px-6 py-12 text-center">
+            <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--canvas)] text-[var(--text-muted)]">
+                <MessageCircle className="h-5 w-5" strokeWidth={1.5} />
             </div>
-            <h3 className="font-bold text-white">{title}</h3>
-            <p className="text-sm text-gray-400 mt-1">{text}</p>
+
+            <h3 className="text-sm font-semibold text-[var(--text)]">{title}</h3>
+
+            <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-[var(--text-muted)]">{text}</p>
         </div>
     );
 }
@@ -1562,6 +1567,7 @@ function Input({
     placeholder,
     type = "text",
     required = false,
+    min,
 }: {
     label: string;
     value: string;
@@ -1569,17 +1575,20 @@ function Input({
     placeholder?: string;
     type?: string;
     required?: boolean;
+    min?: string;
 }) {
     return (
         <label className="block">
-            <span className="block text-sm font-semibold text-gray-300 mb-2">{label}</span>
+            <span className="mb-2 block text-xs font-medium text-[var(--text-soft)]">{label}</span>
+
             <input
                 type={type}
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
                 placeholder={placeholder}
                 required={required}
-                className="w-full bg-gray-950/70 border border-white/10 text-white rounded-xl px-4 py-3 outline-none focus:border-purple-500 placeholder:text-gray-600"
+                min={min}
+                className="linear-input"
             />
         </label>
     );
@@ -1602,14 +1611,15 @@ function Textarea({
 }) {
     return (
         <label className="block">
-            <span className="block text-sm font-semibold text-gray-300 mb-2">{label}</span>
+            <span className="mb-2 block text-xs font-medium text-[var(--text-soft)]">{label}</span>
+
             <textarea
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
                 placeholder={placeholder}
                 rows={rows}
                 required={required}
-                className="w-full bg-gray-950/70 border border-white/10 text-white rounded-xl px-4 py-3 outline-none focus:border-purple-500 placeholder:text-gray-600 resize-none"
+                className="linear-input resize-none"
             />
         </label>
     );
@@ -1630,12 +1640,13 @@ function Select({
 }) {
     return (
         <label className="block">
-            <span className="block text-sm font-semibold text-gray-300 mb-2">{label}</span>
+            <span className="mb-2 block text-xs font-medium text-[var(--text-soft)]">{label}</span>
+
             <select
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
                 required={required}
-                className="w-full bg-gray-950/70 border border-white/10 text-white rounded-xl px-4 py-3 outline-none focus:border-purple-500"
+                className="linear-input"
             >
                 {children}
             </select>

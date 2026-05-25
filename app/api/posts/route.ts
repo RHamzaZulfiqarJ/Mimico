@@ -190,14 +190,20 @@ export async function GET() {
             include: {
                 socialAccount: {
                     select: {
+                        id: true,
                         accountUsername: true,
                         platform: true,
                     },
                 },
             },
-            orderBy: {
-                createdAt: "desc",
-            },
+            orderBy: [
+                {
+                    scheduledAt: "asc",
+                },
+                {
+                    createdAt: "desc",
+                },
+            ],
         });
 
         return NextResponse.json({ posts });

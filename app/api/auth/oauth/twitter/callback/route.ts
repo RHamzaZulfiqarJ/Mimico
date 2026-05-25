@@ -5,6 +5,31 @@ import { cookies } from "next/headers";
 import { prisma } from "@/libs/prisma";
 import { verifyToken } from "@/libs/jwt";
 
+async function parseResponse(res: Response) {
+    const text = await res.text();
+
+    let data: any = null;
+
+    try {
+        data = text ? JSON.parse(text) : null;
+    } catch {
+        data = text;
+    }
+
+    if (!res.ok) {
+        const message =
+            data?.error_description || data?.error || data?.detail || data?.message || text || "Twitter request failed";
+
+        throw new Error(message);
+    }
+
+    return data;
+}
+
+function redirectTo(appUrl: string, path: string) {
+    return NextResponse.redirect(`${appUrl}${path}`);
+}
+
 export async function GET(req: Request) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin;
 
@@ -15,11 +40,11 @@ export async function GET(req: Request) {
         const error = searchParams.get("error");
 
         if (error) {
-            return NextResponse.redirect(`${appUrl}/twitter?error=${encodeURIComponent(error)}`);
+            return redirectTo(appUrl, `/twitter?error=${encodeURIComponent(error)}`);
         }
 
-        if (!code) {
-            return NextResponse.redirect(`${appUrl}/twitter?error=missing_code`);
+        if (!code || !state) {
+            return redirectTo(appUrl, "/twitter?error=missing_code");
         }
 
         const cookieStore = await cookies();
@@ -28,43 +53,50 @@ export async function GET(req: Request) {
         const token = cookieStore.get("token")?.value;
 
         if (!token) {
-            return NextResponse.redirect(`${appUrl}/login`);
+            return redirectTo(appUrl, "/login");
         }
 
         if (!codeVerifier) {
-            return NextResponse.redirect(`${appUrl}/twitter?error=missing_code_verifier`);
+            return redirectTo(appUrl, "/twitter?error=missing_code_verifier");
         }
 
         if (!storedState || storedState !== state) {
-            return NextResponse.redirect(`${appUrl}/twitter?error=invalid_state`);
+            return redirectTo(appUrl, "/twitter?error=invalid_state");
+        }
+
+        const clientId = process.env.TWITTER_CLIENT_ID;
+        const clientSecret = process.env.TWITTER_CLIENT_SECRET;
+
+        if (!clientId) {
+            return redirectTo(appUrl, "/twitter?error=twitter_config");
         }
 
         const payload = verifyToken(token);
 
-        const basicAuth = Buffer.from(`${process.env.TWITTER_CLIENT_ID}:${process.env.TWITTER_CLIENT_SECRET}`).toString(
-            "base64",
-        );
+        const body = new URLSearchParams({
+            code,
+            grant_type: "authorization_code",
+            redirect_uri: `${appUrl}/api/auth/oauth/twitter/callback`,
+            code_verifier: codeVerifier,
+        });
+
+        const headers: Record<string, string> = {
+            "Content-Type": "application/x-www-form-urlencoded",
+        };
+
+        if (clientSecret) {
+            headers.Authorization = `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`;
+        } else {
+            body.set("client_id", clientId);
+        }
 
         const tokenRes = await fetch("https://api.x.com/2/oauth2/token", {
             method: "POST",
-            headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
-                Authorization: `Basic ${basicAuth}`,
-            },
-            body: new URLSearchParams({
-                code,
-                grant_type: "authorization_code",
-                redirect_uri: `${appUrl}/api/auth/oauth/twitter/callback`,
-                code_verifier: codeVerifier,
-            }),
+            headers,
+            body,
         });
 
-        const tokenData = await tokenRes.json();
-
-        if (!tokenRes.ok) {
-            console.error("TWITTER TOKEN ERROR:", tokenData);
-            return NextResponse.redirect(`${appUrl}/twitter?error=token_exchange_failed`);
-        }
+        const tokenData = await parseResponse(tokenRes);
 
         const profileRes = await fetch("https://api.x.com/2/users/me", {
             headers: {
@@ -72,14 +104,12 @@ export async function GET(req: Request) {
             },
         });
 
-        const profileData = await profileRes.json();
-
-        if (!profileRes.ok) {
-            console.error("TWITTER PROFILE ERROR:", profileData);
-            return NextResponse.redirect(`${appUrl}/twitter?error=profile_fetch_failed`);
-        }
-
+        const profileData = await parseResponse(profileRes);
         const twitterUser = profileData.data;
+
+        if (!twitterUser?.id || !twitterUser?.username) {
+            return redirectTo(appUrl, "/twitter?error=profile_fetch_failed");
+        }
 
         const existing = await prisma.socialAccount.findUnique({
             where: {
@@ -91,7 +121,7 @@ export async function GET(req: Request) {
         });
 
         if (existing && existing.userId !== payload.id) {
-            return NextResponse.redirect(`${appUrl}/twitter?error=account_in_use`);
+            return redirectTo(appUrl, "/twitter?error=account_in_use");
         }
 
         if (existing) {
@@ -100,8 +130,10 @@ export async function GET(req: Request) {
                 data: {
                     accountUsername: twitterUser.username,
                     accessToken: tokenData.access_token,
-                    refreshToken: tokenData.refresh_token,
-                    expiresAt: tokenData.expires_in ? new Date(Date.now() + tokenData.expires_in * 1000) : null,
+                    refreshToken: tokenData.refresh_token || existing.refreshToken,
+                    expiresAt: tokenData.expires_in
+                        ? new Date(Date.now() + Number(tokenData.expires_in) * 1000)
+                        : existing.expiresAt,
                 },
             });
         } else {
@@ -111,8 +143,8 @@ export async function GET(req: Request) {
                     accountId: twitterUser.id,
                     accountUsername: twitterUser.username,
                     accessToken: tokenData.access_token,
-                    refreshToken: tokenData.refresh_token,
-                    expiresAt: tokenData.expires_in ? new Date(Date.now() + tokenData.expires_in * 1000) : null,
+                    refreshToken: tokenData.refresh_token || null,
+                    expiresAt: tokenData.expires_in ? new Date(Date.now() + Number(tokenData.expires_in) * 1000) : null,
                     userId: payload.id,
                 },
             });
@@ -126,6 +158,6 @@ export async function GET(req: Request) {
         return response;
     } catch (error) {
         console.error("TWITTER CALLBACK ERROR:", error);
-        return NextResponse.redirect(`${appUrl}/twitter?error=twitter_callback_failed`);
+        return redirectTo(appUrl, "/twitter?error=twitter_callback_failed");
     }
 }

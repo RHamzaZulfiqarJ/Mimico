@@ -1,42 +1,20 @@
-"use client"
+"use client";
 
-import Sidebar from "@/components/Sidebar"
-import Navbar from "@/components/Navbar"
-import { AnimatePresence } from "framer-motion"
-import { usePathname } from "next/navigation"
+import Sidebar from "@/components/Sidebar";
+import Navbar from "@/components/Navbar";
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  const pathname = usePathname()
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+    return (
+        <div className="linear-page flex min-h-screen overflow-hidden">
+            <Sidebar />
 
-  return (
-    <div className="flex min-h-screen overflow-hidden">
+            <div className="flex h-screen min-w-0 flex-1 flex-col">
+                <Navbar />
 
-      {/* Sidebar */}
-      <Sidebar />
-
-      {/* Main area */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen">
-
-        {/* Top Navbar */}
-        <Navbar />
-
-        {/* Page content */}
-        <AnimatePresence mode="wait">
-          <main
-            key={pathname}
-            className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar"
-          >
-            <div className="max-w-7xl mx-auto">
-              {children}
+                <main className="custom-scrollbar flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-6">
+                    <div className="mx-auto w-full max-w-[1440px]">{children}</div>
+                </main>
             </div>
-          </main>
-        </AnimatePresence>
-
-      </div>
-    </div>
-  )
+        </div>
+    );
 }

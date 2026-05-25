@@ -1,197 +1,206 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { motion } from "framer-motion"
-import { useRouter } from "next/navigation"
-import {
-  Share2,
-  Lock,
-  Mail,
-  User,
-  ArrowRight,
-  Check,
-  ArrowLeft,
-} from "lucide-react"
-import { FaGoogle } from "react-icons/fa"
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
+import { FaGoogle } from "react-icons/fa";
+import { ArrowLeft, ArrowRight, Check, Lock, Mail, Share2, User } from "lucide-react";
+import ThemeToggle from "@/components/ThemeToggle";
 
 export default function SignupPage() {
-  const router = useRouter()
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
+    const router = useRouter();
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
+    async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+        e.preventDefault();
+        setLoading(true);
+        setError("");
 
-    const form = e.currentTarget;
+        const form = e.currentTarget;
+        const firstName = form.firstName.value;
+        const lastName = form.lastName.value;
+        const email = form.email.value;
+        const password = form.password.value;
 
-    const firstName = form.firstName.value;
-    const lastName = form.lastName.value;
-    const email = form.email.value;
-    const password = form.password.value;
+        const res = await fetch("/api/auth/signup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ firstName, lastName, email, password }),
+        });
 
-    const res = await fetch("/api/auth/signup", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ firstName, lastName, email, password }),
-    });
+        if (!res.ok) {
+            const data = await res.json();
+            setError(data.message || "Signup failed");
+            setLoading(false);
+            return;
+        }
 
-    if (!res.ok) {
-      const data = await res.json();
-      setError(data.message || "Signup failed");
-      return;
+        setLoading(false);
+        router.push("/dashboard");
     }
 
-    setLoading(false);
-    router.push("/dashboard");
-  }
+    const handleOAuth = () => {
+        window.location.href = "/api/auth/oauth/google";
+    };
 
-  const handleOAuth = () => {
-    window.location.href = "/api/auth/oauth/google"
-  }
+    return (
+        <main className="linear-page relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
+            <div className="pointer-events-none absolute inset-0 linear-grid-bg opacity-40" />
 
-  return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-gray-950">
+            <div className="fixed left-4 right-4 top-4 z-20 flex items-center justify-between md:left-8 md:right-8">
+                <button type="button" onClick={() => router.push("/")} className="linear-button-secondary">
+                    <ArrowLeft className="h-4 w-4" strokeWidth={1.5} />
+                    Home
+                </button>
 
-      {/* Back to Home */}
-      <motion.button
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
-        onClick={() => router.push("/")}
-        className="fixed top-8 left-8 flex items-center gap-2 text-gray-500 hover:text-white transition-colors font-bold text-sm z-50 group"
-      >
-        <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-        Back to Home
-      </motion.button>
-
-      {/* Background */}
-      <div className="absolute top-0 left-0 w-full h-full -z-10">
-        <div className="absolute top-[-10%] left-[-10%] w-[600px] h-[600px] bg-blue-600/5 rounded-full blur-[120px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-purple-600/10 rounded-full blur-[120px]" />
-      </div>
-
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="w-full max-w-xl glass p-10 rounded-[40px] border border-white/10 shadow-2xl relative"
-      >
-        {/* Header */}
-        <div className="flex flex-col items-center mb-10">
-          <div className="w-16 h-16 bg-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-600/30 mb-6">
-            <Share2 className="w-8 h-8 text-white" />
-          </div>
-
-          <h2 className="text-3xl font-black text-white">
-            Create Account
-          </h2>
-          <p className="text-gray-500 text-sm mt-1">
-            Join the future of social management
-          </p>
-        </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-2 gap-6">
-            {/* First Name */}
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-gray-600 uppercase tracking-[0.2em] ml-1">
-                First Name
-              </label>
-              <div className="relative group">
-                <User className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600 group-focus-within:text-purple-400 transition-colors" />
-                <input
-                  type="text"
-                  name="firstName"
-                  required
-                  placeholder="Alex"
-                  className="w-full bg-gray-900 border border-white/5 rounded-2xl py-5 pl-14 pr-5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-all text-sm text-white"
-                />
-              </div>
+                <ThemeToggle />
             </div>
 
-            {/* Last Name */}
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-gray-600 uppercase tracking-[0.2em] ml-1">
-                Last Name
-              </label>
-              <input
-                type="text"
-                name="lastName"
-                required
-                placeholder="Rivera"
-                className="w-full bg-gray-900 border border-white/5 rounded-2xl py-5 px-5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-all text-sm text-white"
-              />
-            </div>
-          </div>
-
-          {/* Email */}
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-gray-600 uppercase tracking-[0.2em] ml-1">
-              Email Address
-            </label>
-            <div className="relative group">
-              <Mail className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600 group-focus-within:text-purple-400 transition-colors" />
-              <input
-                type="email"
-                name="email"
-                required
-                placeholder="alex@sproutpulse.com"
-                className="w-full bg-gray-900 border border-white/5 rounded-2xl py-5 pl-14 pr-5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-all text-sm text-white"
-              />
-            </div>
-          </div>
-
-          {/* Password */}
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-gray-600 uppercase tracking-[0.2em] ml-1">
-              Password
-            </label>
-            <div className="relative group">
-              <Lock className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600 group-focus-within:text-purple-400 transition-colors" />
-              <input
-                type="password"
-                name="password"
-                required
-                placeholder="At least 8 characters"
-                className="w-full bg-gray-900 border border-white/5 rounded-2xl py-5 pl-14 pr-5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-all text-sm text-white"
-              />
-            </div>
-          </div>
-
-          {/* Submit */}
-          <button
-            type="submit"
-            disabled={loading}
-            className="cursor-pointer w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-5 rounded-2xl shadow-xl shadow-purple-600/20 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-70 text-lg"
-          >
-            {loading ? (
-              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            ) : (
-              <>
-                Create Account <ArrowRight className="w-5 h-5" />
-              </>
-            )}
-          </button>
-
-          <button onClick={handleOAuth} className="w-full glass border-white/5 hover:bg-white/5 py-4 rounded-2xl flex items-center justify-center gap-3 text-lg font-bold transition-all text-white">
-            <FaGoogle className="w-5 h-5" /> Sign in with Google
-          </button>
-        </form>
-
-        {/* Footer */}
-        <div className="mt-10 text-center">
-          <p className="text-sm text-gray-500 font-medium">
-            Already have an account?{" "}
-            <button
-              onClick={() => router.push("/login")}
-              className="text-purple-500 font-black hover:text-purple-400 transition-colors cursor-pointer hover:underline"
+            <motion.section
+                initial={{ opacity: 0, y: 8, scale: 0.985 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                className="linear-panel relative z-10 w-full max-w-[560px] overflow-hidden"
             >
-              Log in
-            </button>
-          </p>
-        </div>
-      </motion.div>
-    </div>
-  )
+                <div className="border-b border-[var(--border)] px-6 py-6">
+                    <button
+                        type="button"
+                        onClick={() => router.push("/")}
+                        className="mb-6 flex items-center gap-3 text-left"
+                    >
+                        <span className="flex h-10 w-10 items-center justify-center rounded-md border border-[rgba(255,255,255,0.1)] bg-[var(--accent)] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.16)]">
+                            <Share2 className="h-5 w-5" strokeWidth={1.5} />
+                        </span>
+
+                        <span>
+                            <span className="block text-sm font-semibold tracking-[-0.02em] text-[var(--text)]">
+                                MIMICO
+                            </span>
+                            <span className="block text-xs text-[var(--text-muted)]">Account Manager</span>
+                        </span>
+                    </button>
+
+                    <h1 className="linear-title text-2xl">Create your workspace</h1>
+
+                    <p className="mt-2 text-sm leading-6 text-[var(--text-soft)]">
+                        Start managing connected accounts, scheduled posts, and messaging workflows from one focused
+                        dashboard.
+                    </p>
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-4 px-6 py-6">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                            <label className="text-xs font-medium text-[var(--text-soft)]">First name</label>
+
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    name="firstName"
+                                    required
+                                    placeholder="Alex"
+                                    className="linear-input pl-9"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-xs font-medium text-[var(--text-soft)]">Last name</label>
+
+                            <input
+                                type="text"
+                                name="lastName"
+                                required
+                                placeholder="Doe"
+                                className="linear-input"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-xs font-medium text-[var(--text-soft)]">Email address</label>
+
+                        <div className="relative">
+                            <input
+                                type="email"
+                                name="email"
+                                required
+                                placeholder="you@example.com"
+                                className="linear-input pl-9"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-xs font-medium text-[var(--text-soft)]">Password</label>
+
+                        <div className="relative">
+                            <input
+                                type="password"
+                                name="password"
+                                required
+                                placeholder="At least 8 characters"
+                                className="linear-input pl-9"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid gap-2 rounded-lg border border-[var(--border)] bg-[var(--canvas)] p-3 sm:grid-cols-3">
+                        {["Secure auth", "OAuth ready", "Fast setup"].map((item) => (
+                            <div key={item} className="flex items-center gap-2 text-xs text-[var(--text-soft)]">
+                                <span className="flex h-4 w-4 items-center justify-center rounded-full border border-[rgba(34,197,94,0.24)] bg-[rgba(34,197,94,0.08)] text-[var(--success)]">
+                                    <Check className="h-3 w-3" strokeWidth={1.7} />
+                                </span>
+                                {item}
+                            </div>
+                        ))}
+                    </div>
+
+                    {error && (
+                        <div className="rounded-md border border-[rgba(239,68,68,0.28)] bg-[rgba(239,68,68,0.08)] px-3 py-2 text-sm text-red-300">
+                            {error}
+                        </div>
+                    )}
+
+                    <button type="submit" disabled={loading} className="linear-button-primary h-10 w-full">
+                        {loading ? (
+                            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                        ) : (
+                            <>
+                                Create account
+                                <ArrowRight className="h-4 w-4" strokeWidth={1.5} />
+                            </>
+                        )}
+                    </button>
+
+                    <div className="flex items-center gap-3 py-2">
+                        <div className="h-px flex-1 bg-[var(--border)]" />
+                        <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--text-muted)]">
+                            or
+                        </span>
+                        <div className="h-px flex-1 bg-[var(--border)]" />
+                    </div>
+
+                    <button type="button" onClick={handleOAuth} className="linear-button-secondary h-10 w-full">
+                        <FaGoogle className="h-4 w-4" />
+                        Continue with Google
+                    </button>
+                </form>
+
+                <div className="border-t border-[var(--border)] px-6 py-4 text-center">
+                    <p className="text-sm text-[var(--text-muted)]">
+                        Already have an account?{" "}
+                        <button
+                            type="button"
+                            onClick={() => router.push("/login")}
+                            className="font-medium text-[var(--accent)] hover:text-[var(--accent-hover)]"
+                        >
+                            Sign in
+                        </button>
+                    </p>
+                </div>
+            </motion.section>
+        </main>
+    );
 }
