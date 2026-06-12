@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState, type ElementType } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useState, type ElementType } from "react";
 import { motion } from "framer-motion";
 import {
     Activity,
@@ -41,50 +41,13 @@ type Notice = {
     message: string;
 };
 
-type FacebookLoginResponse = {
-    authResponse?: {
-        code?: string;
-    };
-    status?: string;
+const emptyConnectForm = {
+    businessName: "",
+    businessAccountId: "",
+    phoneNumberId: "",
+    phoneNumberDisplay: "",
+    accessToken: "",
 };
-
-type FacebookLoginOptions = {
-    config_id: string;
-    response_type: "code";
-    override_default_response_type: boolean;
-    extras: {
-        feature: "whatsapp_embedded_signup";
-        sessionInfoVersion: number;
-    };
-};
-
-type WhatsAppEmbeddedSignupData = {
-    wabaId: string;
-    phoneNumberId: string;
-    businessId?: string | null;
-};
-
-type WhatsAppEmbeddedSignupMessage = {
-    type?: string;
-    event?: string;
-    data?: {
-        waba_id?: string;
-        phone_number_id?: string;
-        business_id?: string;
-        error_message?: string;
-        current_step?: string;
-    };
-};
-
-declare global {
-    interface Window {
-        fbAsyncInit?: () => void;
-        FB?: {
-            init: (options: { appId: string; cookie: boolean; xfbml: boolean; version: string }) => void;
-            login: (callback: (response: FacebookLoginResponse) => void, options: FacebookLoginOptions) => void;
-        };
-    }
-}
 
 const emptyContactForm = {
     name: "",
@@ -212,10 +175,9 @@ export default function WhatsAppDashboardPage() {
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState("");
     const [notice, setNotice] = useState<Notice | null>(null);
-    const [facebookSdkReady, setFacebookSdkReady] = useState(false);
-    const embeddedSignupDataRef = useRef<WhatsAppEmbeddedSignupData | null>(null);
     const [searchContacts, setSearchContacts] = useState("");
     const [searchLogs, setSearchLogs] = useState("");
+    const [connectForm, setConnectForm] = useState(emptyConnectForm);
     const [contactForm, setContactForm] = useState(emptyContactForm);
     const [scheduleForm, setScheduleForm] = useState(emptyScheduleForm);
     const [templateForm, setTemplateForm] = useState(emptyTemplateForm);
@@ -321,84 +283,6 @@ export default function WhatsAppDashboardPage() {
         }
     };
 
-    useEffect(() => {
-        const appId = process.env.NEXT_PUBLIC_META_APP_ID;
-
-        if (!appId) {
-            return;
-        }
-
-        window.fbAsyncInit = () => {
-            window.FB?.init({
-                appId,
-                cookie: true,
-                xfbml: false,
-                version: process.env.NEXT_PUBLIC_META_GRAPH_API_VERSION || "v25.0",
-            });
-            setFacebookSdkReady(true);
-        };
-
-        if (document.getElementById("facebook-jssdk")) {
-            if (window.FB) {
-                window.fbAsyncInit();
-            }
-
-            return;
-        }
-
-        const script = document.createElement("script");
-        script.id = "facebook-jssdk";
-        script.src = "https://connect.facebook.net/en_US/sdk.js";
-        script.async = true;
-        script.defer = true;
-        document.body.appendChild(script);
-    }, []);
-
-    useEffect(() => {
-        const allowedOrigins = new Set(["https://www.facebook.com", "https://web.facebook.com"]);
-
-        const handleMessage = (event: MessageEvent) => {
-            if (!allowedOrigins.has(event.origin)) {
-                return;
-            }
-
-            let payload: WhatsAppEmbeddedSignupMessage;
-
-            try {
-                payload = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
-            } catch {
-                return;
-            }
-
-            if (payload?.type !== "WA_EMBEDDED_SIGNUP") {
-                return;
-            }
-
-            if (payload.event === "FINISH") {
-                const wabaId = payload.data?.waba_id;
-                const phoneNumberId = payload.data?.phone_number_id;
-
-                if (wabaId && phoneNumberId) {
-                    embeddedSignupDataRef.current = {
-                        wabaId,
-                        phoneNumberId,
-                        businessId: payload.data?.business_id || null,
-                    };
-                }
-            }
-
-            if (payload.event === "ERROR") {
-                showNotice("error", payload.data?.error_message || "WhatsApp Embedded Signup failed");
-            }
-        };
-
-        window.addEventListener("message", handleMessage);
-
-        return () => {
-            window.removeEventListener("message", handleMessage);
-        };
-    }, []);
-
     const refreshSelectedAccountData = async () => {
         if (!selectedAccountId) {
             setContacts([]);
@@ -448,95 +332,22 @@ export default function WhatsAppDashboardPage() {
         });
     }, [selectedTemplateVariables.length]);
 
-    const waitForEmbeddedSignupData = () => {
-        return new Promise<WhatsAppEmbeddedSignupData>((resolve, reject) => {
-            if (embeddedSignupDataRef.current) {
-                resolve(embeddedSignupDataRef.current);
-                return;
-            }
+    const handleConnectAccount = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
 
-            const startedAt = Date.now();
-            const timer = window.setInterval(() => {
-                if (embeddedSignupDataRef.current) {
-                    window.clearInterval(timer);
-                    resolve(embeddedSignupDataRef.current);
-                    return;
-                }
-
-                if (Date.now() - startedAt > 15000) {
-                    window.clearInterval(timer);
-                    reject(new Error("WhatsApp signup finished without account details"));
-                }
-            }, 250);
-        });
-    };
-
-    const handleFacebookLoginResponse = async (response: FacebookLoginResponse) => {
         try {
-            const code = response.authResponse?.code;
+            setActionLoading("connect");
 
-            if (!code) {
-                throw new Error("Facebook login was cancelled or did not return a code");
-            }
+            const result = await whatsappClient.connectAccount(connectForm);
 
-            const signupData = await waitForEmbeddedSignupData();
-
-            const result = await whatsappClient.connectFacebookAccount({
-                code,
-                wabaId: signupData.wabaId,
-                phoneNumberId: signupData.phoneNumberId,
-                businessId: signupData.businessId,
-            });
-
+            setConnectForm(emptyConnectForm);
             await loadAccounts();
             setSelectedAccountId(result.account.id);
-            showNotice("success", "WhatsApp account connected with Facebook");
+            showNotice("success", "WhatsApp account connected");
         } catch (error) {
             showNotice("error", getErrorMessage(error));
         } finally {
             setActionLoading("");
-        }
-    };
-
-    const handleConnectWithFacebook = () => {
-        const configId = process.env.NEXT_PUBLIC_META_WHATSAPP_CONFIG_ID;
-
-        if (window.location.protocol !== "https:") {
-            showNotice("error", "Facebook Login requires HTTPS. Use https://localhost:3000, not http://localhost:3000");
-            return;
-        }
-
-        if (!process.env.NEXT_PUBLIC_META_APP_ID || !configId) {
-            showNotice("error", "Meta app configuration is missing");
-            return;
-        }
-
-        if (!window.FB || !facebookSdkReady) {
-            showNotice("error", "Facebook SDK is not ready yet");
-            return;
-        }
-
-        embeddedSignupDataRef.current = null;
-        setActionLoading("connectFacebook");
-
-        try {
-            window.FB.login(
-                (response) => {
-                    void handleFacebookLoginResponse(response);
-                },
-                {
-                    config_id: configId,
-                    response_type: "code",
-                    override_default_response_type: true,
-                    extras: {
-                        feature: "whatsapp_embedded_signup",
-                        sessionInfoVersion: 3,
-                    },
-                },
-            );
-        } catch (error) {
-            setActionLoading("");
-            showNotice("error", getErrorMessage(error));
         }
     };
 
@@ -993,51 +804,69 @@ export default function WhatsAppDashboardPage() {
                     </div>
 
                     <div className="linear-card overflow-hidden">
-                        <SectionHeader
-                            title="Connect WhatsApp"
-                            text="Use Facebook Login for Business and WhatsApp Embedded Signup."
-                        />
+                        <SectionHeader title="Connect Number" text="Use Meta WhatsApp Business details." />
 
-                        <div className="space-y-4 p-4">
-                            <div className="rounded-lg border border-[rgba(34,197,94,0.22)] bg-[rgba(34,197,94,0.08)] p-4">
-                                <div className="flex items-start gap-3">
-                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[rgba(34,197,94,0.22)] bg-[var(--canvas)] text-[var(--success)]">
-                                        <MessageCircle className="h-5 w-5" strokeWidth={1.5} />
-                                    </div>
+                        <form onSubmit={handleConnectAccount} className="space-y-3 p-4">
+                            <Input
+                                label="Business Name"
+                                value={connectForm.businessName}
+                                onChange={(value) => setConnectForm((current) => ({ ...current, businessName: value }))}
+                                placeholder="Hamza Business"
+                                required
+                            />
 
-                                    <div>
-                                        <h3 className="text-sm font-semibold text-[var(--text)]">
-                                            Connect without manual credentials
-                                        </h3>
-                                        <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
-                                            Facebook will handle business selection, WABA setup, phone number selection,
-                                            and approval.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
+                            <Input
+                                label="WABA ID"
+                                value={connectForm.businessAccountId}
+                                onChange={(value) =>
+                                    setConnectForm((current) => ({ ...current, businessAccountId: value }))
+                                }
+                                placeholder="4383963308557925"
+                                required
+                            />
+
+                            <Input
+                                label="Phone Number ID"
+                                value={connectForm.phoneNumberId}
+                                onChange={(value) =>
+                                    setConnectForm((current) => ({ ...current, phoneNumberId: value }))
+                                }
+                                placeholder="1108178919047639"
+                                required
+                            />
+
+                            <Input
+                                label="Display Number"
+                                value={connectForm.phoneNumberDisplay}
+                                onChange={(value) =>
+                                    setConnectForm((current) => ({ ...current, phoneNumberDisplay: value }))
+                                }
+                                placeholder="+92 300 1234567"
+                                required
+                            />
+
+                            <Textarea
+                                label="Access Token"
+                                value={connectForm.accessToken}
+                                onChange={(value) => setConnectForm((current) => ({ ...current, accessToken: value }))}
+                                placeholder="Paste Meta access token"
+                                rows={4}
+                                required
+                            />
 
                             <button
-                                type="button"
-                                onClick={handleConnectWithFacebook}
-                                disabled={actionLoading === "connectFacebook"}
-                                className="linear-button-primary h-10 w-full"
+                                type="submit"
+                                disabled={actionLoading === "connect"}
+                                className="linear-button-primary h-9 w-full"
                             >
-                                {actionLoading === "connectFacebook" ? (
+                                {actionLoading === "connect" ? (
                                     <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
                                 ) : (
                                     <Plus className="h-4 w-4" strokeWidth={1.5} />
                                 )}
-                                Connect with Facebook
+                                Connect Account
                             </button>
-
-                            {!facebookSdkReady && (
-                                <p className="text-xs leading-5 text-[var(--text-muted)]">
-                                    Facebook SDK is loading. Make sure your Meta app ID and Embedded Signup
-                                    configuration ID are added in env.
-                                </p>
-                            )}
-                        </div>
+                        </form>
                     </div>
                 </div>
 

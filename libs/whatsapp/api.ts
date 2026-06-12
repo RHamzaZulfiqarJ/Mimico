@@ -33,25 +33,6 @@ export type VerifyWhatsAppPhoneNumberInput = {
     accessToken: string;
 };
 
-export type ExchangeEmbeddedSignupCodeInput = {
-    code: string;
-};
-
-export type ExchangeEmbeddedSignupCodeResponse = {
-    access_token: string;
-    token_type?: string;
-    expires_in?: number;
-};
-
-export type SubscribeWhatsAppAppInput = {
-    businessAccountId: string;
-    accessToken: string;
-};
-
-export type SubscribeWhatsAppAppResponse = {
-    success?: boolean;
-};
-
 export type FetchWhatsAppBusinessPhoneNumbersInput = {
     businessAccountId: string;
     accessToken: string;
@@ -393,53 +374,6 @@ export const verifyWhatsAppPhoneNumber = async (input: VerifyWhatsAppPhoneNumber
         query: {
             fields: "id,display_phone_number,verified_name,quality_rating,code_verification_status",
         },
-    });
-};
-
-export const exchangeEmbeddedSignupCode = async (input: ExchangeEmbeddedSignupCodeInput) => {
-    const appId = process.env.META_APP_ID;
-    const appSecret = process.env.META_APP_SECRET;
-
-    if (!appId || !appSecret) {
-        throw new WhatsAppApiError("META_APP_ID or META_APP_SECRET is missing", 500);
-    }
-
-    const response = await fetch(
-        buildMetaUrl("oauth/access_token", {
-            client_id: appId,
-            client_secret: appSecret,
-            code: input.code,
-        }),
-        {
-            method: "GET",
-            cache: "no-store",
-        },
-    );
-
-    const payload = await readJson(response);
-
-    if (!response.ok) {
-        const errorPayload = payload as MetaErrorPayload;
-        const metaError = errorPayload?.error;
-
-        throw new WhatsAppApiError(
-            metaError?.message || "Embedded Signup code exchange failed",
-            response.status,
-            metaError?.code,
-            metaError?.error_subcode,
-            metaError?.fbtrace_id,
-            payload,
-        );
-    }
-
-    return payload as ExchangeEmbeddedSignupCodeResponse;
-};
-
-export const subscribeWhatsAppApp = async (input: SubscribeWhatsAppAppInput) => {
-    return metaRequest<SubscribeWhatsAppAppResponse>({
-        path: `${input.businessAccountId}/subscribed_apps`,
-        method: "POST",
-        accessToken: input.accessToken,
     });
 };
 

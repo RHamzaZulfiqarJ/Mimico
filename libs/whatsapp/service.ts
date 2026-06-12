@@ -2,7 +2,6 @@ import { Prisma, WhatsAppMessageDirection, WhatsAppScheduledMessageStatus } from
 import { prisma } from "@/libs/prisma";
 import {
     connectWhatsAppAccountSchema,
-    connectWhatsAppEmbeddedSignupSchema,
     createWhatsAppContactSchema,
     updateWhatsAppContactSchema,
     importWhatsAppContactsSchema,
@@ -14,7 +13,6 @@ import {
     bulkSendNowWhatsAppTemplateMessagesSchema,
     whatsAppPaginationSchema,
     type ConnectWhatsAppAccountInput,
-    type ConnectWhatsAppEmbeddedSignupInput,
     type CreateWhatsAppContactInput,
     type UpdateWhatsAppContactInput,
     type ImportWhatsAppContactsInput,
@@ -28,13 +26,11 @@ import {
 
 import {
     createWhatsAppTemplate as createMetaWhatsAppTemplate,
-    exchangeEmbeddedSignupCode,
     fetchWhatsAppTemplates,
     getWhatsAppContactWaId,
     getWhatsAppMessageId,
     sendWhatsAppTemplateMessage,
     sendWhatsAppTextMessage,
-    subscribeWhatsAppApp,
     verifyWhatsAppPhoneNumber,
     WhatsAppApiError,
 } from "@/libs/whatsapp/api";
@@ -256,95 +252,6 @@ export const connectWhatsAppAccount = async (userId: string, body: ConnectWhatsA
         refreshToken: null,
         tokenExpiry: null,
         expiresAt: null,
-        isActive: true,
-    };
-
-    if (existingAccount) {
-        return prisma.socialAccount.update({
-            where: {
-                id: existingAccount.id,
-            },
-            data,
-        });
-    }
-
-    return prisma.socialAccount.create({
-        data,
-    });
-};
-
-const getTokenExpiryDate = (expiresIn?: number) => {
-    if (!expiresIn || expiresIn <= 0) {
-        return null;
-    }
-
-    return new Date(Date.now() + expiresIn * 1000);
-};
-
-export const connectWhatsAppAccountFromEmbeddedSignup = async (
-    userId: string,
-    body: ConnectWhatsAppEmbeddedSignupInput,
-) => {
-    const input = connectWhatsAppEmbeddedSignupSchema.parse(body);
-
-    const existingAccount = await prisma.socialAccount.findFirst({
-        where: {
-            platform: WHATSAPP_PLATFORM,
-            accountId: input.phoneNumberId,
-        },
-    });
-
-    if (existingAccount && existingAccount.userId !== userId) {
-        fail("This WhatsApp number is already connected with another user", 409);
-    }
-
-    let tokenResponse;
-
-    try {
-        tokenResponse = await exchangeEmbeddedSignupCode({
-            code: input.code,
-        });
-    } catch (error) {
-        throw normalizeError(error);
-    }
-
-    if (!tokenResponse.access_token) {
-        fail("Meta did not return an access token", 502);
-    }
-
-    let verifiedPhone;
-
-    try {
-        verifiedPhone = await verifyWhatsAppPhoneNumber({
-            phoneNumberId: input.phoneNumberId,
-            accessToken: tokenResponse.access_token,
-        });
-
-        await subscribeWhatsAppApp({
-            businessAccountId: input.wabaId,
-            accessToken: tokenResponse.access_token,
-        });
-    } catch (error) {
-        throw normalizeError(error);
-    }
-
-    const expiryDate = getTokenExpiryDate(tokenResponse.expires_in);
-    const businessName = verifiedPhone.verified_name || "WhatsApp Business";
-
-    const data = {
-        platform: WHATSAPP_PLATFORM,
-        accountId: input.phoneNumberId,
-        accountUsername: verifiedPhone.verified_name || verifiedPhone.display_phone_number || input.phoneNumberId,
-        accessToken: tokenResponse.access_token,
-        businessAccountId: input.wabaId,
-        phoneNumberId: input.phoneNumberId,
-        phoneNumberDisplay: verifiedPhone.display_phone_number || null,
-        businessName,
-        userId,
-        instanceUrl: input.businessId || null,
-        refreshToken: null,
-        tokenExpiry: expiryDate,
-        expiresAt: expiryDate,
         isActive: true,
     };
 
