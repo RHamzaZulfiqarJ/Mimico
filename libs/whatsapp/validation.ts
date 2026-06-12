@@ -87,6 +87,13 @@ export const connectWhatsAppAccountSchema = z.object({
     accessToken: tokenSchema,
 });
 
+export const connectWhatsAppEmbeddedSignupSchema = z.object({
+    code: z.string().trim().min(10, "Authorization code is required").max(2000, "Authorization code is too long"),
+    wabaId: digitIdSchema,
+    phoneNumberId: digitIdSchema,
+    businessId: digitIdSchema.optional().nullable(),
+});
+
 export const createWhatsAppContactSchema = z.object({
     socialAccountId: uuidSchema,
     name: nameSchema,
@@ -366,6 +373,7 @@ export const bulkSendNowWhatsAppTemplateMessagesSchema = z
     }));
 
 export type ConnectWhatsAppAccountInput = z.infer<typeof connectWhatsAppAccountSchema>;
+export type ConnectWhatsAppEmbeddedSignupInput = z.infer<typeof connectWhatsAppEmbeddedSignupSchema>;
 export type CreateWhatsAppContactInput = z.infer<typeof createWhatsAppContactSchema>;
 export type UpdateWhatsAppContactInput = z.infer<typeof updateWhatsAppContactSchema>;
 export type ImportWhatsAppContactsInput = z.infer<typeof importWhatsAppContactsSchema>;

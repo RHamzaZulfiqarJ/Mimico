@@ -1,38 +1,42 @@
 import { Prisma, WhatsAppMessageDirection, WhatsAppScheduledMessageStatus } from "@prisma/client";
 import { prisma } from "@/libs/prisma";
 import {
-  connectWhatsAppAccountSchema,
-  createWhatsAppContactSchema,
-  updateWhatsAppContactSchema,
-  importWhatsAppContactsSchema,
-  scheduleWhatsAppTemplateMessageSchema,
-  bulkScheduleWhatsAppTemplateMessagesSchema,
-  sendWhatsAppTextReplySchema,
-  createWhatsAppTemplateSchema,
-  sendNowWhatsAppTemplateMessageSchema,
-  bulkSendNowWhatsAppTemplateMessagesSchema,
-  whatsAppPaginationSchema,
-  type ConnectWhatsAppAccountInput,
-  type CreateWhatsAppContactInput,
-  type UpdateWhatsAppContactInput,
-  type ImportWhatsAppContactsInput,
-  type ScheduleWhatsAppTemplateMessageInput,
-  type BulkScheduleWhatsAppTemplateMessagesInput,
-  type SendWhatsAppTextReplyInput,
-  type CreateWhatsAppTemplateInput,
-  type SendNowWhatsAppTemplateMessageInput,
-  type BulkSendNowWhatsAppTemplateMessagesInput,
+    connectWhatsAppAccountSchema,
+    connectWhatsAppEmbeddedSignupSchema,
+    createWhatsAppContactSchema,
+    updateWhatsAppContactSchema,
+    importWhatsAppContactsSchema,
+    scheduleWhatsAppTemplateMessageSchema,
+    bulkScheduleWhatsAppTemplateMessagesSchema,
+    sendWhatsAppTextReplySchema,
+    createWhatsAppTemplateSchema,
+    sendNowWhatsAppTemplateMessageSchema,
+    bulkSendNowWhatsAppTemplateMessagesSchema,
+    whatsAppPaginationSchema,
+    type ConnectWhatsAppAccountInput,
+    type ConnectWhatsAppEmbeddedSignupInput,
+    type CreateWhatsAppContactInput,
+    type UpdateWhatsAppContactInput,
+    type ImportWhatsAppContactsInput,
+    type ScheduleWhatsAppTemplateMessageInput,
+    type BulkScheduleWhatsAppTemplateMessagesInput,
+    type SendWhatsAppTextReplyInput,
+    type CreateWhatsAppTemplateInput,
+    type SendNowWhatsAppTemplateMessageInput,
+    type BulkSendNowWhatsAppTemplateMessagesInput,
 } from "@/libs/whatsapp/validation";
 
 import {
-  createWhatsAppTemplate as createMetaWhatsAppTemplate,
-  fetchWhatsAppTemplates,
-  getWhatsAppContactWaId,
-  getWhatsAppMessageId,
-  sendWhatsAppTemplateMessage,
-  sendWhatsAppTextMessage,
-  verifyWhatsAppPhoneNumber,
-  WhatsAppApiError,
+    createWhatsAppTemplate as createMetaWhatsAppTemplate,
+    exchangeEmbeddedSignupCode,
+    fetchWhatsAppTemplates,
+    getWhatsAppContactWaId,
+    getWhatsAppMessageId,
+    sendWhatsAppTemplateMessage,
+    sendWhatsAppTextMessage,
+    subscribeWhatsAppApp,
+    verifyWhatsAppPhoneNumber,
+    WhatsAppApiError,
 } from "@/libs/whatsapp/api";
 
 const WHATSAPP_PLATFORM = "whatsapp";
@@ -114,42 +118,42 @@ const toJson = (value: unknown): Prisma.InputJsonValue | undefined => {
 };
 
 const buildStoredTemplateComponents = (input: {
-  headerText?: string;
-  bodyText: string;
-  footerText?: string;
-  bodyExamples?: string[];
+    headerText?: string;
+    bodyText: string;
+    footerText?: string;
+    bodyExamples?: string[];
 }) => {
-  const components = [];
+    const components = [];
 
-  if (input.headerText) {
-    components.push({
-      type: "HEADER",
-      format: "TEXT",
-      text: input.headerText,
-    });
-  }
+    if (input.headerText) {
+        components.push({
+            type: "HEADER",
+            format: "TEXT",
+            text: input.headerText,
+        });
+    }
 
-  const bodyComponent: Record<string, unknown> = {
-    type: "BODY",
-    text: input.bodyText,
-  };
-
-  if (input.bodyExamples && input.bodyExamples.length > 0) {
-    bodyComponent.example = {
-      body_text: [input.bodyExamples],
+    const bodyComponent: Record<string, unknown> = {
+        type: "BODY",
+        text: input.bodyText,
     };
-  }
 
-  components.push(bodyComponent);
+    if (input.bodyExamples && input.bodyExamples.length > 0) {
+        bodyComponent.example = {
+            body_text: [input.bodyExamples],
+        };
+    }
 
-  if (input.footerText) {
-    components.push({
-      type: "FOOTER",
-      text: input.footerText,
-    });
-  }
+    components.push(bodyComponent);
 
-  return components;
+    if (input.footerText) {
+        components.push({
+            type: "FOOTER",
+            text: input.footerText,
+        });
+    }
+
+    return components;
 };
 
 const getPagination = (input: PaginationInput = {}) => {
@@ -269,6 +273,95 @@ export const connectWhatsAppAccount = async (userId: string, body: ConnectWhatsA
     });
 };
 
+const getTokenExpiryDate = (expiresIn?: number) => {
+    if (!expiresIn || expiresIn <= 0) {
+        return null;
+    }
+
+    return new Date(Date.now() + expiresIn * 1000);
+};
+
+export const connectWhatsAppAccountFromEmbeddedSignup = async (
+    userId: string,
+    body: ConnectWhatsAppEmbeddedSignupInput,
+) => {
+    const input = connectWhatsAppEmbeddedSignupSchema.parse(body);
+
+    const existingAccount = await prisma.socialAccount.findFirst({
+        where: {
+            platform: WHATSAPP_PLATFORM,
+            accountId: input.phoneNumberId,
+        },
+    });
+
+    if (existingAccount && existingAccount.userId !== userId) {
+        fail("This WhatsApp number is already connected with another user", 409);
+    }
+
+    let tokenResponse;
+
+    try {
+        tokenResponse = await exchangeEmbeddedSignupCode({
+            code: input.code,
+        });
+    } catch (error) {
+        throw normalizeError(error);
+    }
+
+    if (!tokenResponse.access_token) {
+        fail("Meta did not return an access token", 502);
+    }
+
+    let verifiedPhone;
+
+    try {
+        verifiedPhone = await verifyWhatsAppPhoneNumber({
+            phoneNumberId: input.phoneNumberId,
+            accessToken: tokenResponse.access_token,
+        });
+
+        await subscribeWhatsAppApp({
+            businessAccountId: input.wabaId,
+            accessToken: tokenResponse.access_token,
+        });
+    } catch (error) {
+        throw normalizeError(error);
+    }
+
+    const expiryDate = getTokenExpiryDate(tokenResponse.expires_in);
+    const businessName = verifiedPhone.verified_name || "WhatsApp Business";
+
+    const data = {
+        platform: WHATSAPP_PLATFORM,
+        accountId: input.phoneNumberId,
+        accountUsername: verifiedPhone.verified_name || verifiedPhone.display_phone_number || input.phoneNumberId,
+        accessToken: tokenResponse.access_token,
+        businessAccountId: input.wabaId,
+        phoneNumberId: input.phoneNumberId,
+        phoneNumberDisplay: verifiedPhone.display_phone_number || null,
+        businessName,
+        userId,
+        instanceUrl: input.businessId || null,
+        refreshToken: null,
+        tokenExpiry: expiryDate,
+        expiresAt: expiryDate,
+        isActive: true,
+    };
+
+    if (existingAccount) {
+        return prisma.socialAccount.update({
+            where: {
+                id: existingAccount.id,
+            },
+            data,
+        });
+    }
+
+    return prisma.socialAccount.create({
+        data,
+    });
+};
+
 export const listWhatsAppAccounts = async (userId: string) => {
     return prisma.socialAccount.findMany({
         where: {
@@ -354,61 +447,61 @@ export const syncWhatsAppTemplates = async (userId: string, socialAccountId: str
 };
 
 export const createCustomWhatsAppTemplate = async (userId: string, body: CreateWhatsAppTemplateInput) => {
-  const input = createWhatsAppTemplateSchema.parse(body);
-  const account = await assertWhatsAppAccountOwner(userId, input.socialAccountId);
+    const input = createWhatsAppTemplateSchema.parse(body);
+    const account = await assertWhatsAppAccountOwner(userId, input.socialAccountId);
 
-  let response;
+    let response;
 
-  try {
-    response = await createMetaWhatsAppTemplate({
-      businessAccountId: account.businessAccountId as string,
-      accessToken: account.accessToken,
-      name: input.name,
-      category: input.category,
-      language: input.language,
-      headerText: input.headerText,
-      bodyText: input.bodyText,
-      footerText: input.footerText,
-      bodyExamples: input.bodyExamples,
+    try {
+        response = await createMetaWhatsAppTemplate({
+            businessAccountId: account.businessAccountId as string,
+            accessToken: account.accessToken,
+            name: input.name,
+            category: input.category,
+            language: input.language,
+            headerText: input.headerText,
+            bodyText: input.bodyText,
+            footerText: input.footerText,
+            bodyExamples: input.bodyExamples,
+        });
+    } catch (error) {
+        throw normalizeError(error);
+    }
+
+    const components = buildStoredTemplateComponents({
+        headerText: input.headerText,
+        bodyText: input.bodyText,
+        footerText: input.footerText,
+        bodyExamples: input.bodyExamples,
     });
-  } catch (error) {
-    throw normalizeError(error);
-  }
 
-  const components = buildStoredTemplateComponents({
-    headerText: input.headerText,
-    bodyText: input.bodyText,
-    footerText: input.footerText,
-    bodyExamples: input.bodyExamples,
-  });
+    const template = await prisma.whatsAppTemplate.upsert({
+        where: {
+            socialAccountId_name_language: {
+                socialAccountId: account.id,
+                name: input.name,
+                language: input.language,
+            },
+        },
+        create: {
+            socialAccountId: account.id,
+            name: input.name,
+            language: input.language,
+            category: response.category || input.category,
+            status: response.status || "PENDING",
+            components: toJson(components),
+        },
+        update: {
+            category: response.category || input.category,
+            status: response.status || "PENDING",
+            components: toJson(components),
+        },
+    });
 
-  const template = await prisma.whatsAppTemplate.upsert({
-    where: {
-      socialAccountId_name_language: {
-        socialAccountId: account.id,
-        name: input.name,
-        language: input.language,
-      },
-    },
-    create: {
-      socialAccountId: account.id,
-      name: input.name,
-      language: input.language,
-      category: response.category || input.category,
-      status: response.status || "PENDING",
-      components: toJson(components),
-    },
-    update: {
-      category: response.category || input.category,
-      status: response.status || "PENDING",
-      components: toJson(components),
-    },
-  });
-
-  return {
-    template,
-    meta: response,
-  };
+    return {
+        template,
+        meta: response,
+    };
 };
 
 export const listWhatsAppTemplates = async (
@@ -631,24 +724,20 @@ export const listWhatsAppContacts = async (
     };
 };
 
-const validateTemplateForSending = async (
-  socialAccountId: string,
-  templateName: string,
-  templateLanguage: string
-) => {
-  const template = await prisma.whatsAppTemplate.findFirst({
-    where: {
-      socialAccountId,
-      name: templateName,
-      language: templateLanguage,
-    },
-  });
+const validateTemplateForSending = async (socialAccountId: string, templateName: string, templateLanguage: string) => {
+    const template = await prisma.whatsAppTemplate.findFirst({
+        where: {
+            socialAccountId,
+            name: templateName,
+            language: templateLanguage,
+        },
+    });
 
-  if (template && template.status && template.status.toUpperCase() !== "APPROVED") {
-    fail("Selected WhatsApp template is not approved", 400);
-  }
+    if (template && template.status && template.status.toUpperCase() !== "APPROVED") {
+        fail("Selected WhatsApp template is not approved", 400);
+    }
 
-  return template;
+    return template;
 };
 
 export const scheduleWhatsAppTemplateMessage = async (userId: string, body: ScheduleWhatsAppTemplateMessageInput) => {
@@ -759,188 +848,186 @@ export const bulkScheduleWhatsAppTemplateMessages = async (
     };
 };
 
-export const sendNowWhatsAppTemplateMessage = async (
-  userId: string,
-  body: SendNowWhatsAppTemplateMessageInput
-) => {
-  const input = sendNowWhatsAppTemplateMessageSchema.parse(body);
-  const account = await assertWhatsAppAccountOwner(userId, input.socialAccountId);
+export const sendNowWhatsAppTemplateMessage = async (userId: string, body: SendNowWhatsAppTemplateMessageInput) => {
+    const input = sendNowWhatsAppTemplateMessageSchema.parse(body);
+    const account = await assertWhatsAppAccountOwner(userId, input.socialAccountId);
 
-  let contact = null;
+    let contact = null;
 
-  if (input.contactId) {
-    contact = await prisma.whatsAppContact.findFirst({
-      where: {
-        id: input.contactId,
-        userId,
-        socialAccountId: account.id,
-      },
-    });
+    if (input.contactId) {
+        contact = await prisma.whatsAppContact.findFirst({
+            where: {
+                id: input.contactId,
+                userId,
+                socialAccountId: account.id,
+            },
+        });
 
-    if (!contact) {
-      fail("WhatsApp contact not found", 404);
+        if (!contact) {
+            fail("WhatsApp contact not found", 404);
+        }
+
+        if (contact.isBlocked) {
+            fail("This contact is blocked", 400);
+        }
     }
 
-    if (contact.isBlocked) {
-      fail("This contact is blocked", 400);
-    }
-  }
+    await validateTemplateForSending(account.id, input.templateName, input.templateLanguage);
 
-  await validateTemplateForSending(account.id, input.templateName, input.templateLanguage);
-
-  const message = await prisma.whatsAppScheduledMessage.create({
-    data: {
-      userId,
-      socialAccountId: account.id,
-      contactId: contact?.id,
-      recipientPhone: input.recipientPhone,
-      templateName: input.templateName,
-      templateLanguage: input.templateLanguage,
-      templateParams: toJson(input.templateParams),
-      scheduledAt: new Date(),
-      status: WhatsAppScheduledMessageStatus.QUEUED,
-    },
-  });
-
-  try {
-    const sentMessage = await sendOneScheduledWhatsAppMessage(message.id);
-
-    return {
-      success: true,
-      message: sentMessage,
-    };
-  } catch (error) {
-    const normalized = normalizeError(error);
-
-    const failedMessage = await prisma.whatsAppScheduledMessage.findUnique({
-      where: {
-        id: message.id,
-      },
-    });
-
-    return {
-      success: false,
-      message: failedMessage,
-      error: normalized.message,
-      statusCode: normalized.statusCode,
-      code: normalized.code,
-      subcode: normalized.subcode,
-      fbtraceId: normalized.fbtraceId,
-    };
-  }
-};
-
-export const bulkSendNowWhatsAppTemplateMessages = async (
-  userId: string,
-  body: BulkSendNowWhatsAppTemplateMessagesInput
-) => {
-  const input = bulkSendNowWhatsAppTemplateMessagesSchema.parse(body);
-  const account = await assertWhatsAppAccountOwner(userId, input.socialAccountId);
-
-  await validateTemplateForSending(account.id, input.templateName, input.templateLanguage);
-
-  const contacts = input.contactIds.length > 0
-    ? await prisma.whatsAppContact.findMany({
-        where: {
-          id: {
-            in: input.contactIds,
-          },
-          userId,
-          socialAccountId: account.id,
-          isBlocked: false,
-        },
-      })
-    : [];
-
-  const fromContacts = contacts.map((contact) => ({
-    contactId: contact.id,
-    recipientPhone: contact.phoneNumber,
-  }));
-
-  const fromPhones = input.recipientPhones.map((phone) => ({
-    contactId: null,
-    recipientPhone: phone,
-  }));
-
-  const merged = [...fromContacts, ...fromPhones];
-  const seen = new Set<string>();
-
-  const recipients = merged.filter((recipient) => {
-    if (seen.has(recipient.recipientPhone)) {
-      return false;
-    }
-
-    seen.add(recipient.recipientPhone);
-    return true;
-  });
-
-  if (recipients.length === 0) {
-    fail("No valid recipients found", 400);
-  }
-
-  const results = [];
-
-  for (const recipient of recipients) {
     const message = await prisma.whatsAppScheduledMessage.create({
-      data: {
-        userId,
-        socialAccountId: account.id,
-        contactId: recipient.contactId,
-        recipientPhone: recipient.recipientPhone,
-        templateName: input.templateName,
-        templateLanguage: input.templateLanguage,
-        templateParams: toJson(input.templateParams),
-        scheduledAt: new Date(),
-        status: WhatsAppScheduledMessageStatus.QUEUED,
-      },
+        data: {
+            userId,
+            socialAccountId: account.id,
+            contactId: contact?.id,
+            recipientPhone: input.recipientPhone,
+            templateName: input.templateName,
+            templateLanguage: input.templateLanguage,
+            templateParams: toJson(input.templateParams),
+            scheduledAt: new Date(),
+            status: WhatsAppScheduledMessageStatus.QUEUED,
+        },
     });
 
     try {
-      const sentMessage = await sendOneScheduledWhatsAppMessage(message.id);
+        const sentMessage = await sendOneScheduledWhatsAppMessage(message.id);
 
-      results.push({
-        id: message.id,
-        recipientPhone: recipient.recipientPhone,
-        success: true,
-        status: sentMessage.status,
-        error: null,
-      });
+        return {
+            success: true,
+            message: sentMessage,
+        };
     } catch (error) {
-      const normalized = normalizeError(error);
+        const normalized = normalizeError(error);
 
-      const failedMessage = await prisma.whatsAppScheduledMessage.findUnique({
-        where: {
-          id: message.id,
-        },
-        select: {
-          status: true,
-        },
-      });
+        const failedMessage = await prisma.whatsAppScheduledMessage.findUnique({
+            where: {
+                id: message.id,
+            },
+        });
 
-      results.push({
-        id: message.id,
-        recipientPhone: recipient.recipientPhone,
-        success: false,
-        status: failedMessage?.status || "FAILED",
-        error: normalized.message,
-        statusCode: normalized.statusCode,
-        code: normalized.code,
-        subcode: normalized.subcode,
-        fbtraceId: normalized.fbtraceId,
-      });
+        return {
+            success: false,
+            message: failedMessage,
+            error: normalized.message,
+            statusCode: normalized.statusCode,
+            code: normalized.code,
+            subcode: normalized.subcode,
+            fbtraceId: normalized.fbtraceId,
+        };
     }
-  }
+};
 
-  const sent = results.filter((result) => result.success).length;
-  const failed = results.length - sent;
+export const bulkSendNowWhatsAppTemplateMessages = async (
+    userId: string,
+    body: BulkSendNowWhatsAppTemplateMessagesInput,
+) => {
+    const input = bulkSendNowWhatsAppTemplateMessagesSchema.parse(body);
+    const account = await assertWhatsAppAccountOwner(userId, input.socialAccountId);
 
-  return {
-    success: failed === 0,
-    total: results.length,
-    sent,
-    failed,
-    results,
-  };
+    await validateTemplateForSending(account.id, input.templateName, input.templateLanguage);
+
+    const contacts =
+        input.contactIds.length > 0
+            ? await prisma.whatsAppContact.findMany({
+                  where: {
+                      id: {
+                          in: input.contactIds,
+                      },
+                      userId,
+                      socialAccountId: account.id,
+                      isBlocked: false,
+                  },
+              })
+            : [];
+
+    const fromContacts = contacts.map((contact) => ({
+        contactId: contact.id,
+        recipientPhone: contact.phoneNumber,
+    }));
+
+    const fromPhones = input.recipientPhones.map((phone) => ({
+        contactId: null,
+        recipientPhone: phone,
+    }));
+
+    const merged = [...fromContacts, ...fromPhones];
+    const seen = new Set<string>();
+
+    const recipients = merged.filter((recipient) => {
+        if (seen.has(recipient.recipientPhone)) {
+            return false;
+        }
+
+        seen.add(recipient.recipientPhone);
+        return true;
+    });
+
+    if (recipients.length === 0) {
+        fail("No valid recipients found", 400);
+    }
+
+    const results = [];
+
+    for (const recipient of recipients) {
+        const message = await prisma.whatsAppScheduledMessage.create({
+            data: {
+                userId,
+                socialAccountId: account.id,
+                contactId: recipient.contactId,
+                recipientPhone: recipient.recipientPhone,
+                templateName: input.templateName,
+                templateLanguage: input.templateLanguage,
+                templateParams: toJson(input.templateParams),
+                scheduledAt: new Date(),
+                status: WhatsAppScheduledMessageStatus.QUEUED,
+            },
+        });
+
+        try {
+            const sentMessage = await sendOneScheduledWhatsAppMessage(message.id);
+
+            results.push({
+                id: message.id,
+                recipientPhone: recipient.recipientPhone,
+                success: true,
+                status: sentMessage.status,
+                error: null,
+            });
+        } catch (error) {
+            const normalized = normalizeError(error);
+
+            const failedMessage = await prisma.whatsAppScheduledMessage.findUnique({
+                where: {
+                    id: message.id,
+                },
+                select: {
+                    status: true,
+                },
+            });
+
+            results.push({
+                id: message.id,
+                recipientPhone: recipient.recipientPhone,
+                success: false,
+                status: failedMessage?.status || "FAILED",
+                error: normalized.message,
+                statusCode: normalized.statusCode,
+                code: normalized.code,
+                subcode: normalized.subcode,
+                fbtraceId: normalized.fbtraceId,
+            });
+        }
+    }
+
+    const sent = results.filter((result) => result.success).length;
+    const failed = results.length - sent;
+
+    return {
+        success: failed === 0,
+        total: results.length,
+        sent,
+        failed,
+        results,
+    };
 };
 
 export const listWhatsAppScheduledMessages = async (

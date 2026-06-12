@@ -42,9 +42,9 @@
     --surface-hover: rgba(15, 23, 42, 0.04);
     --surface-active: #e7e9fb;
     --border: rgba(15, 23, 42, 0.1);
-    --border-strong: #d9deea;
+    --border-strong: #d8dce7;
     --border-focus: #5e6ad2;
-    --text: #101116;
+    --text: #000000;
     --text-body: rgba(16, 17, 22, 0.86);
     --text-soft: #545b6e;
     --text-muted: #7a8294;
@@ -331,7 +331,7 @@ kbd {
 .linear-button-danger {
     border: 1px solid rgba(239, 68, 68, 0.25);
     background: rgba(239, 68, 68, 0.1);
-    color: #fecaca;
+    color: #be2f2f;
 }
 
 .linear-button-danger:hover {

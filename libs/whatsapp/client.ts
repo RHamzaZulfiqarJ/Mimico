@@ -101,6 +101,13 @@ export type ConnectWhatsAppAccountPayload = {
     accessToken: string;
 };
 
+export type ConnectWhatsAppFacebookPayload = {
+    code: string;
+    wabaId: string;
+    phoneNumberId: string;
+    businessId?: string | null;
+};
+
 export type CreateWhatsAppContactPayload = {
     socialAccountId: string;
     name: string;
@@ -288,6 +295,13 @@ export const whatsappClient = {
 
     connectAccount: (payload: ConnectWhatsAppAccountPayload) => {
         return apiRequest<{ success: boolean; account: WhatsAppAccount }>("/api/whatsapp/accounts", {
+            method: "POST",
+            body: JSON.stringify(payload),
+        });
+    },
+
+    connectFacebookAccount: (payload: ConnectWhatsAppFacebookPayload) => {
+        return apiRequest<{ success: boolean; account: WhatsAppAccount }>("/api/whatsapp/accounts/facebook", {
             method: "POST",
             body: JSON.stringify(payload),
         });
